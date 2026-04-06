@@ -14,7 +14,7 @@ from supersonic_atomizer.domain import (
     ModelSelectionConfig,
     OutputConfig,
 )
-from supersonic_atomizer.thermo import AirThermoProvider, select_thermo_provider
+from supersonic_atomizer.thermo import AirThermoProvider, SteamThermoProvider, select_thermo_provider
 
 
 def _build_case_config(*, working_fluid: str, steam_property_model: str | None = None) -> CaseConfig:
@@ -54,16 +54,28 @@ class TestRuntimeThermoBackendSelection(unittest.TestCase):
         self.assertIsInstance(provider, AirThermoProvider)
         self.assertEqual(provider.working_fluid, "air")
 
-    def test_rejects_unavailable_steam_selection_without_backend(self) -> None:
+    def test_selects_default_steam_provider_without_explicit_backend(self) -> None:
         case_config = _build_case_config(working_fluid="steam")
 
-        with self.assertRaises(ModelSelectionError):
-            select_thermo_provider(case_config)
+        provider = select_thermo_provider(case_config)
+
+        self.assertIsInstance(provider, SteamThermoProvider)
+        self.assertEqual(provider.working_fluid, "steam")
+
+    def test_selects_supported_named_steam_backend(self) -> None:
+        case_config = _build_case_config(
+            working_fluid="steam",
+            steam_property_model="equilibrium_mvp",
+        )
+
+        provider = select_thermo_provider(case_config)
+
+        self.assertIsInstance(provider, SteamThermoProvider)
 
     def test_rejects_unsupported_steam_backend_name(self) -> None:
         case_config = _build_case_config(
             working_fluid="steam",
-            steam_property_model="if97_stub",
+            steam_property_model="unsupported_backend",
         )
 
         with self.assertRaises(ModelSelectionError):

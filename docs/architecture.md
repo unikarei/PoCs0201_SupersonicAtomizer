@@ -318,13 +318,14 @@ The following data models are recommended architectural concepts. Names may evol
 
 ### 5.6 Error Models
 
-- `InputValidationError`
+- `InputParsingError`
 - `ConfigurationError`
-- `ModelSelectionError`
-- `NumericalFailureError`
-- `OutputWriteError`
+- `NumericalError`
+- `ThermoError`
+- `OutputError`
+- `ValidationError`
 
-These can be implemented as exception classes later, but the architecture should already distinguish them conceptually.
+These are implemented as concrete exception classes in `common/errors.py` and used across config, thermo, solver, IO, and validation boundaries.
 
 ---
 
@@ -336,48 +337,54 @@ A recommended project layout is:
 project/
   ├─ docs/
   │   ├─ spec.md
-  │   └─ architecture.md
+  │   ├─ architecture.md
+  │   └─ tasks.md
   ├─ src/
   │   └─ supersonic_atomizer/
   │       ├─ app/
   │       │   ├─ run_simulation.py
-  │       │   └─ services.py
+  │       │   ├─ services.py
+  │       │   └─ result_assembly.py
   │       ├─ cli/
   │       │   └─ main.py
   │       ├─ config/
   │       │   ├─ loader.py
   │       │   ├─ schema.py
+  │       │   ├─ semantics.py
   │       │   ├─ defaults.py
   │       │   └─ translator.py
   │       ├─ domain/
   │       │   ├─ case_models.py
-  │       │   ├─ geometry_models.py
   │       │   ├─ state_models.py
-  │       │   ├─ result_models.py
-  │       │   └─ diagnostics.py
+  │       │   └─ result_models.py
   │       ├─ thermo/
   │       │   ├─ interfaces.py
   │       │   ├─ air.py
-  │       │   ├─ steam_interface.py
-  │       │   └─ steam_if97.py
+  │       │   ├─ steam.py
+  │       │   ├─ selection.py
+  │       │   └─ failures.py
   │       ├─ geometry/
   │       │   ├─ area_profile.py
-  │       │   └─ interpolation.py
+  │       │   ├─ geometry_model.py
+  │       │   └─ diagnostics.py
   │       ├─ grid/
   │       │   └─ axial_grid.py
   │       ├─ solvers/
   │       │   ├─ gas/
-  │       │   │   ├─ interfaces.py
   │       │   │   ├─ quasi_1d_solver.py
+  │       │   │   ├─ boundary_conditions.py
+  │       │   │   ├─ state_updates.py
   │       │   │   └─ diagnostics.py
   │       │   └─ droplet/
-  │       │       ├─ interfaces.py
   │       │       ├─ transport_solver.py
+  │       │       ├─ drag_models.py
+  │       │       ├─ updates.py
   │       │       └─ diagnostics.py
   │       ├─ breakup/
   │       │   ├─ interfaces.py
   │       │   ├─ weber_critical.py
-  │       │   └─ registry.py
+  │       │   ├─ registry.py
+  │       │   └─ diagnostics.py
   │       ├─ io/
   │       │   ├─ csv_writer.py
   │       │   ├─ json_writer.py
@@ -387,18 +394,13 @@ project/
   │       │   └─ styles.py
   │       ├─ validation/
   │       │   ├─ sanity_checks.py
-  │       │   ├─ reference_cases.py
   │       │   └─ reporting.py
   │       └─ common/
-  │           ├─ constants.py
-  │           ├─ units.py
   │           └─ errors.py
   ├─ tests/
-  │   ├─ unit/
-  │   ├─ integration/
-  │   └─ validation/
   ├─ examples/
-  │   └─ sample_case.yaml
+  │   ├─ air_nozzle.yaml
+  │   └─ steam_nozzle.yaml
   └─ README.md
 ```
 
@@ -502,11 +504,13 @@ The primary external configuration source is YAML.
 
 ### 9.2 Configuration Processing Stages
 
-Configuration handling should occur in three stages:
+Configuration handling occurs in five stages:
 
-1. raw parse
-2. schema validation
-3. translation into internal typed case models
+1. raw YAML parse (`loader`)
+2. schema validation — required sections and field presence (`schema`)
+3. semantic validation — physical and structural constraints (`semantics`)
+4. defaults application — centralized default injection (`defaults`)
+5. translation into internal typed case models (`translator`)
 
 This avoids leaking YAML structure into solver code.
 
@@ -761,3 +765,157 @@ The architecture is a layered, interface-driven Python application with the foll
 - CLI remains a thin entry point over the application workflow.
 
 This structure supports the MVP while keeping future IF97 integration and model expansion manageable.
+
+---
+
+## Appendix B. GUI Layer Architecture
+
+> This appendix defines the architectural boundaries, module decomposition, data flow, and directory structure for the GUI extension described in [docs/spec.md — Appendix B](spec.md).
+
+### B.1 GUI Layer Position
+
+The GUI layer sits entirely above the existing application service boundary. It must not bypass or duplicate any solver, config, domain, IO, or plotting logic.
+
+```
+┌──────────────────────────────────────────────┐
+│                  GUI Layer                   │
+│  (browser / desktop front-end)               │
+└──────────────────┬───────────────────────────┘
+                   │  calls
+┌──────────────────▼───────────────────────────┐
+│           Application Service                │
+│  (app/services.py — unchanged)               │
+└──────────────────┬───────────────────────────┘
+                   │
+┌──────────────────▼───────────────────────────┐
+│   Config / Domain / Solvers / IO / Plotting  │
+│   (all existing layers — unchanged)          │
+└──────────────────────────────────────────────┘
+```
+
+### B.2 GUI Module Decomposition
+
+The GUI package shall be organized under `src/supersonic_atomizer/gui/`.
+
+| Module | Responsibility |
+|---|---|
+| `gui/app.py` | Application entry point; assembles and launches the GUI |
+| `gui/layout.py` | Top-level layout: left panel + main area composition |
+| `gui/panels/case_panel.py` | Left panel: case list, new case, open case |
+| `gui/pages/pre_conditions.py` | Pre Tab 1: analysis condition form controls |
+| `gui/pages/pre_grid.py` | Pre Tab 2: grid definition table and area preview |
+| `gui/pages/solve.py` | Solve tab: run button, convergence settings, status, history plot |
+| `gui/pages/post_graphs.py` | Post Tab 1: axial profile plots |
+| `gui/pages/post_table.py` | Post Tab 2: results table and CSV export |
+| `gui/case_store.py` | Case persistence: save/load case state across sessions |
+| `gui/service_bridge.py` | Thin adapter between GUI events and the application service |
+| `gui/state.py` | GUI-side reactive or session state model |
+
+### B.3 Architectural Boundary Rules
+
+- `gui/` modules must depend only on `app/services.py` and result/domain models.
+- `gui/` modules must not import from `solvers/`, `thermo/`, `config/`, or `breakup/` directly.
+- `gui/service_bridge.py` is the only permitted call site into the application service from the GUI.
+- `gui/case_store.py` owns all case-persistence logic; no other GUI module reads/writes case files directly.
+- Solver execution must remain non-blocking from the GUI perspective; a background thread or async pattern must be used.
+- The GUI must handle `ApplicationService` errors and surface them as user-readable messages without exposing internal tracebacks.
+
+### B.4 GUI Data Flow
+
+```
+User action
+  → GUI state update (gui/state.py)
+  → gui/service_bridge.py calls ApplicationService
+  → ApplicationService returns SimulationRunResult
+  → gui/state.py stores result
+  → GUI pages re-render from state
+    → post_graphs.py reads result axial arrays → plots
+    → post_table.py reads result axial arrays → table
+    → solve.py reads diagnostics → status display
+```
+
+### B.5 Case Store Design
+
+- Cases are stored as YAML files in a configurable local case directory (default: `cases/`).
+- `case_store.py` provides create, list, load, and save operations.
+- Each case YAML file is structurally identical to the existing input format consumed by `config/loader.py`.
+- The GUI never constructs YAML manually; it translates form state into the internal case model, which is then serialized by `case_store.py`.
+
+### B.6 Directory Structure Addition
+
+```text
+src/supersonic_atomizer/
+  └─ gui/
+      ├─ app.py
+      ├─ layout.py
+      ├─ state.py
+      ├─ service_bridge.py
+      ├─ case_store.py
+      ├─ panels/
+      │   └─ case_panel.py
+      └─ pages/
+          ├─ pre_conditions.py
+          ├─ pre_grid.py
+          ├─ solve.py
+          ├─ post_graphs.py
+          └─ post_table.py
+cases/               ← default case-store directory
+```
+
+### B.7 Technology Selection Constraints
+
+- Technology must be Python-only.
+- Technology must not require a separate non-Python server process.
+- Technology must support tabular input, form controls, and Matplotlib-compatible or equivalent plot rendering.
+- Technology selection is finalized during Phase 23 planning before implementation begins.
+- Candidates include Streamlit, Panel, Dash, and Tkinter; the choice must be documented in the task plan before any GUI code is written.
+
+### B.7.1 Selected Technology: Streamlit (decided — P23-T01)
+
+**Selected framework:** Streamlit
+
+**Version added:** streamlit==1.56.0 (added via `uv add streamlit`)
+
+**Rationale:**
+
+| Constraint | Streamlit assessment |
+|---|---|
+| Python-only developer API | All GUI code is pure Python; no JavaScript required. |
+| No separate non-Python server | Streamlit runs its own Python (Tornado) server; no external non-Python process. |
+| Tabular input | `st.data_editor` provides the editable $(x, A)$ table required by Pre Tab 2. |
+| Form controls | Full widget set: `st.selectbox`, `st.number_input`, `st.slider`, etc. |
+| Matplotlib rendering | `st.pyplot()` renders Matplotlib figures natively without conversion. |
+| Browser-based | Launches in the default browser; no desktop toolkit required. |
+| Non-blocking solver | `threading.Thread` + `st.session_state` isolates synchronous solver execution from the UI loop. |
+| Development simplicity | Highest among candidates; no callback wiring or layout DSL needed. |
+
+**Rejected alternatives:**
+
+- **Panel:** More flexible but more complex API; not necessary for this application's scope.
+- **Dash:** Uses a JavaScript/React front-end internally; adds complexity without benefit over Streamlit for this use case.
+- **Tkinter:** Desktop-only (no browser); limited `st.data_editor` equivalent; higher embedding effort for Matplotlib.
+
+**Non-blocking design resolution (risk B.8):**
+The solver is invoked in a background `threading.Thread`. Completion status and results are stored in `st.session_state`. The UI polls state on rerun. The Run button is disabled by a session-state flag while the thread is alive.
+
+### B.8 GUI Technical Risks
+
+- **Blocking solver execution:** The simulation engine is synchronous; the GUI must not freeze during a run. Threading or async design must be resolved before implementation.
+- **State management complexity:** Multi-tab GUI state is more complex than CLI; state model design must be completed before page modules are implemented.
+- **Case-store conflicts:** If a user edits a case while a simulation is running, race conditions may arise. Write-locking or copy-on-run semantics must be defined.
+- **Technology lock-in:** The chosen GUI framework constrains the deployment model. The `service_bridge.py` boundary must be preserved so the framework can be swapped if needed.
+
+### B.9 Unit Conversion Boundary
+
+Unit conversions shall occur exclusively at the GUI display boundary.
+
+**Rules:**
+
+- `gui/unit_settings.py` owns all unit-group definitions, conversion factors (scale + offset), and formatting helpers.
+- No conversion logic shall appear in solver, domain, IO, plotting, or config modules.
+- `gui/pages/post_graphs.py` and `gui/pages/post_table.py` apply conversions by consuming `state.unit_preferences()` at the display boundary only.
+- `gui/pages/pre_conditions.py` and `gui/pages/pre_grid.py` accept SI inputs only. No unit conversion is applied to user-entered condition values.
+- All values stored in `GUIState` condition and grid fields remain in SI units.
+- Unit preferences are stored as `str` fields in `GUIState` (one field per quantity group).
+- Conversion formula: `display_value = si_value × scale + offset`. The offset is non-zero only for temperature (K to \u00b0C: offset = \u2212273.15).
+- When `unit_preferences` is `None` or absent, all display helpers shall fall back to SI values with SI labels.

@@ -1,0 +1,44 @@
+# Steam Convergent-Divergent Nozzle Example
+#
+# A simple steam case for the Supersonic Atomizer MVP.
+# This exercises:
+#   - equilibrium MVP steam thermo provider
+#   - quasi-1D gas flow through a converging-diverging area schedule
+#   - droplet transport with slip-velocity drag
+#   - Weber-threshold breakup
+#   - CSV, JSON, and Matplotlib plot outputs
+
+fluid:
+  working_fluid: steam
+
+boundary_conditions:
+  Pt_in: 205000.0    # Pa (inlet total pressure)
+  Tt_in: 450.0       # K  (inlet total temperature)
+  Ps_out: 200000.0   # Pa (outlet static pressure)
+
+geometry:
+  x_start: 0.0
+  x_end: 0.1
+  n_cells: 20
+  area_distribution:
+    type: table
+    x: [0.0, 0.025, 0.05, 0.075, 0.1]
+    A: [0.0001, 0.00009, 0.00008, 0.00009, 0.0001]
+
+droplet_injection:
+  droplet_velocity_in: 5.0        # m/s
+  droplet_diameter_mean_in: 0.0001  # m (100 µm)
+  droplet_diameter_max_in: 0.0002   # m (200 µm)
+
+models:
+  breakup_model: weber_critical
+  critical_weber_number: 12.0
+  breakup_factor_mean: 0.5
+  breakup_factor_max: 0.75
+  steam_property_model: equilibrium_mvp
+
+outputs:
+  output_directory: outputs/steam_nozzle
+  write_csv: true
+  write_json: true
+  generate_plots: true

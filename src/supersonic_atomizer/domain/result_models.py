@@ -60,5 +60,6 @@ class SimulationResult:
 	gas_solution: GasSolution
 	droplet_solution: DropletSolution
 	diagnostics: RunDiagnostics
+	settings_summary: dict[str, object] = field(default_factory=dict)
 	validation_report: ValidationReport | None = None
 	output_metadata: OutputMetadata | None = None

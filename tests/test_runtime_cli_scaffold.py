@@ -5,7 +5,7 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from supersonic_atomizer.app import StartupResult
+from supersonic_atomizer.app import SimulationRunResult, StartupResult
 from supersonic_atomizer.cli import (
     CLIOptions,
     build_parser,
@@ -20,12 +20,19 @@ class _StubApplicationService:
     def __init__(self) -> None:
         self.received_case_path: str | None = None
         self.startup_result = StartupResult(status="ready", case_path="unset")
+        self.run_result: SimulationRunResult | None = None
 
     def run_startup(self, case_path: str) -> StartupResult:
         self.received_case_path = case_path
         if self.startup_result.case_path == "unset":
             return StartupResult(status="ready", case_path=case_path)
         return self.startup_result
+
+    def run_simulation(self, case_path: str) -> SimulationRunResult:
+        self.received_case_path = case_path
+        if self.run_result is not None:
+            return self.run_result
+        return SimulationRunResult(status="completed", case_path=case_path)
 
 
 class TestRuntimeCliScaffold(unittest.TestCase):
@@ -47,14 +54,15 @@ class TestRuntimeCliScaffold(unittest.TestCase):
     def test_main_hands_case_path_to_application_service_boundary(self) -> None:
         application_service = _StubApplicationService()
 
-        startup_result = main(
-            ["startup-case.yaml"],
+        result = main(
+            ["startup-case.yaml", "--startup-only"],
             application_service=application_service,
         )
 
         self.assertEqual(application_service.received_case_path, "startup-case.yaml")
-        self.assertEqual(startup_result.status, "ready")
-        self.assertEqual(startup_result.case_path, "startup-case.yaml")
+        self.assertIsInstance(result, StartupResult)
+        self.assertEqual(result.status, "ready")
+        self.assertEqual(result.case_path, "startup-case.yaml")
 
     def test_format_startup_report_distinguishes_configuration_failures(self) -> None:
         startup_result = StartupResult(
@@ -78,7 +86,7 @@ class TestRuntimeCliScaffold(unittest.TestCase):
         stderr = io.StringIO()
 
         exit_code = run_cli(
-            ["ok-case.yaml"],
+            ["ok-case.yaml", "--startup-only"],
             application_service=application_service,
             stdout=stdout,
             stderr=stderr,
@@ -100,7 +108,7 @@ class TestRuntimeCliScaffold(unittest.TestCase):
         stderr = io.StringIO()
 
         exit_code = run_cli(
-            ["steam-case.yaml"],
+            ["steam-case.yaml", "--startup-only"],
             application_service=application_service,
             stdout=stdout,
             stderr=stderr,

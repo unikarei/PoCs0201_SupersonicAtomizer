@@ -102,45 +102,45 @@ These items may be considered in later releases only after the MVP is validated.
 
 ### 5.1 Input Handling
 
-- [ ] The simulator shall accept case configuration from a YAML input file.
-- [ ] The simulator shall accept user-defined area distribution $A(x)$.
-- [ ] The simulator shall accept inlet total pressure.
-- [ ] The simulator shall accept inlet total temperature.
-- [ ] The simulator shall accept outlet static pressure.
-- [ ] The simulator shall accept working fluid selection as air or steam.
-- [ ] The simulator shall accept optional inlet wetness for steam cases.
-- [ ] The simulator shall accept droplet injection conditions.
+- [x] The simulator shall accept case configuration from a YAML input file.
+- [x] The simulator shall accept user-defined area distribution $A(x)$.
+- [x] The simulator shall accept inlet total pressure.
+- [x] The simulator shall accept inlet total temperature.
+- [x] The simulator shall accept outlet static pressure.
+- [x] The simulator shall accept working fluid selection as air or steam.
+- [x] The simulator shall accept optional inlet wetness for steam cases.
+- [x] The simulator shall accept droplet injection conditions.
 
 ### 5.2 Flow Simulation
 
-- [ ] The simulator shall solve a steady quasi-1D compressible flow problem along the axial coordinate.
-- [ ] The simulator shall compute axial distributions of pressure, temperature, density, velocity, and Mach number.
-- [ ] The simulator shall support a fluid property abstraction that allows air and steam implementations.
-- [ ] The steam implementation shall be designed to support IF97-based properties.
-- [ ] The first release shall assume equilibrium steam behavior.
+- [x] The simulator shall solve a steady quasi-1D compressible flow problem along the axial coordinate.
+- [x] The simulator shall compute axial distributions of pressure, temperature, density, velocity, and Mach number.
+- [x] The simulator shall support a fluid property abstraction that allows air and steam implementations.
+- [x] The steam implementation shall be designed to support IF97-based properties.
+- [x] The first release shall assume equilibrium steam behavior.
 
 ### 5.3 Droplet Simulation
 
-- [ ] The simulator shall compute droplet velocity evolution along $x$.
-- [ ] The simulator shall compute droplet mean diameter evolution along $x$.
-- [ ] The simulator shall compute droplet maximum diameter evolution along $x$.
-- [ ] The simulator shall compute slip velocity between working fluid and droplets.
-- [ ] The simulator shall compute droplet Weber number along $x$.
-- [ ] The simulator shall apply a simple breakup criterion when Weber number exceeds a defined threshold.
-- [ ] The simulator shall update droplet diameter metrics after breakup events according to the selected MVP breakup rule.
+- [x] The simulator shall compute droplet velocity evolution along $x$.
+- [x] The simulator shall compute droplet mean diameter evolution along $x$.
+- [x] The simulator shall compute droplet maximum diameter evolution along $x$.
+- [x] The simulator shall compute slip velocity between working fluid and droplets.
+- [x] The simulator shall compute droplet Weber number along $x$.
+- [x] The simulator shall apply a simple breakup criterion when Weber number exceeds a defined threshold.
+- [x] The simulator shall update droplet diameter metrics after breakup events according to the selected MVP breakup rule.
 
 ### 5.4 Outputs
 
-- [ ] The simulator shall export numerical results to CSV.
-- [ ] The simulator shall export numerical results to JSON.
-- [ ] The simulator shall generate plots of major quantities versus $x$ using Matplotlib.
-- [ ] The simulator shall provide run status and error information through the CLI.
+- [x] The simulator shall export numerical results to CSV.
+- [x] The simulator shall export numerical results to JSON.
+- [x] The simulator shall generate plots of major quantities versus $x$ using Matplotlib.
+- [x] The simulator shall provide run status and error information through the CLI.
 
 ### 5.5 Software Structure
 
-- [ ] The software shall be structured to separate physics, solver, IO, plotting, validation, and configuration concerns.
-- [ ] The software shall be written in Python only.
-- [ ] The software shall be organized for testability and future extension.
+- [x] The software shall be structured to separate physics, solver, IO, plotting, validation, and configuration concerns.
+- [x] The software shall be written in Python only.
+- [x] The software shall be organized for testability and future extension.
 
 ---
 
@@ -418,15 +418,25 @@ The project should eventually include:
 ### 14.1 Open Questions Requiring Later Decision
 
 1. What exact steam property backend or library should be used for IF97 support?
+   - **Resolved (MVP):** The MVP uses a restricted equilibrium-vapor approximation (`SteamThermoProvider`) as an IF97-ready placeholder. The thermo interface is designed for clean future replacement by a full IF97 library.
 2. Is steam support required in the first executable MVP, or is an IF97-ready interface sufficient while air is implemented first?
+   - **Resolved:** Both air and steam are executable in the MVP. Steam uses an idealized vapor model behind the shared `ThermoProvider` interface.
 3. Should the quasi-1D gas solver for the MVP assume strictly isentropic core flow with boundary-condition closure, or a more general formulation with losses?
+   - **Resolved:** The MVP uses strictly isentropic quasi-1D flow with area-Mach closure. No loss models.
 4. Should frictional losses be excluded entirely in the MVP?
+   - **Resolved:** Yes, frictional losses are excluded.
 5. What droplet loading range is expected, and is one-way coupling acceptable for all intended MVP use cases?
+   - **Resolved:** One-way coupling (gas → droplets) is used. Droplet feedback to gas is neglected.
 6. Is `water_mass_flow_rate` mandatory, or can droplet injection be specified by an alternative loading parameter?
+   - **Resolved:** `water_mass_flow_rate` is optional. Droplet injection is specified by initial velocity, mean diameter, and maximum diameter.
 7. What exact rule should be used after breakup to update mean and maximum droplet diameters?
+   - **Resolved:** When $We > We_{crit}$: `d_mean_new = d_mean × breakup_factor_mean`, `d_max_new = max(d_max × breakup_factor_max, d_mean_new)`. Both factors are required user inputs in $(0, 1)$.
 8. Should evaporation be excluded entirely from the first executable MVP, even though future hooks may exist in the architecture?
+   - **Resolved:** Yes, evaporation is excluded from the MVP.
 9. What minimum validation references are acceptable for steam cases in the absence of experimental breakup data?
+   - **Resolved:** Trend-based validation is used: gas-solution completeness, slip-driven acceleration, breakup threshold behavior. No experimental reference data required for MVP.
 10. Should choking and supersonic branch handling be mandatory in MVP, or allowed only if needed by approved cases?
+    - **Resolved:** Choking-aware branch selection is not implemented. The MVP subsonic foundation path rejects area ratios ≤ 1.0 with an explicit `NumericalError`.
 
 ### 14.2 Working Assumptions Until Resolved
 
@@ -447,33 +457,33 @@ The specification will be considered satisfied for MVP planning when the future 
 
 ### 15.1 Product Acceptance Criteria
 
-- [ ] A user can define a simulation case in YAML.
-- [ ] A user can specify air or steam as the working fluid.
-- [ ] A user can provide inlet total pressure, inlet total temperature, outlet static pressure, and optional inlet wetness.
-- [ ] A user can provide area distribution $A(x)$ and droplet injection conditions.
-- [ ] The simulator computes axial results for pressure, temperature, working fluid velocity, Mach number, droplet velocity, droplet mean diameter, droplet maximum diameter, and Weber number.
-- [ ] The simulator applies a simple breakup criterion based on Weber number threshold.
-- [ ] The simulator exports results to CSV and JSON.
-- [ ] The simulator generates plots of major variables versus $x$.
-- [ ] The simulator runs from a CLI in Python.
+- [x] A user can define a simulation case in YAML.
+- [x] A user can specify air or steam as the working fluid.
+- [x] A user can provide inlet total pressure, inlet total temperature, outlet static pressure, and optional inlet wetness.
+- [x] A user can provide area distribution $A(x)$ and droplet injection conditions.
+- [x] The simulator computes axial results for pressure, temperature, working fluid velocity, Mach number, droplet velocity, droplet mean diameter, droplet maximum diameter, and Weber number.
+- [x] The simulator applies a simple breakup criterion based on Weber number threshold.
+- [x] The simulator exports results to CSV and JSON.
+- [x] The simulator generates plots of major variables versus $x$.
+- [x] The simulator runs from a CLI in Python.
 
 ### 15.2 Engineering Acceptance Criteria
 
-- [ ] The software structure clearly separates physics, solver, IO, plotting, validation, and configuration layers.
-- [ ] Assumptions and limitations are explicitly documented.
-- [ ] Invalid inputs are rejected with clear errors.
-- [ ] Numerical failures are surfaced clearly rather than silently ignored.
-- [ ] At least the minimum validation behaviors defined in this specification are covered by planned tests or validation cases.
+- [x] The software structure clearly separates physics, solver, IO, plotting, validation, and configuration layers.
+- [x] Assumptions and limitations are explicitly documented.
+- [x] Invalid inputs are rejected with clear errors.
+- [x] Numerical failures are surfaced clearly rather than silently ignored.
+- [x] At least the minimum validation behaviors defined in this specification are covered by planned tests or validation cases.
 
 ### 15.3 MVP Boundary Acceptance Criteria
 
-- [ ] The MVP does not attempt to solve 3D CFD.
-- [ ] The MVP does not include droplet-droplet collision or coalescence.
-- [ ] The MVP does not include wall-film physics.
-- [ ] The MVP does not include detailed external free jet physics.
-- [ ] The MVP does not include plate impingement.
-- [ ] The MVP does not include non-equilibrium condensation.
-- [ ] The MVP does not include high-fidelity turbulence modeling.
+- [x] The MVP does not attempt to solve 3D CFD.
+- [x] The MVP does not include droplet-droplet collision or coalescence.
+- [x] The MVP does not include wall-film physics.
+- [x] The MVP does not include detailed external free jet physics.
+- [x] The MVP does not include plate impingement.
+- [x] The MVP does not include non-equilibrium condensation.
+- [x] The MVP does not include high-fidelity turbulence modeling.
 
 ---
 
@@ -498,3 +508,135 @@ The specification will be considered satisfied for MVP planning when the future 
 - plate impingement
 - non-equilibrium condensation
 - high-fidelity turbulence modeling
+
+---
+
+## Appendix B. GUI Extension — Scope and Requirements
+
+> This appendix defines the scope and functional requirements for the interactive GUI layer planned beyond the CLI-only MVP.
+> The CLI engine and all physics remain unchanged. The GUI is a front-end wrapper only.
+
+### B.1 Purpose
+
+The GUI extension provides a browser-based interactive interface for the simulator, enabling case management, condition setup, solver execution monitoring, and result visualization without requiring CLI or YAML knowledge from the user.
+
+### B.2 Layout Overview
+
+```
+┌──────────────────┬───────────────────────────────────────────────────┐
+│  Left Panel      │  Main Area                                        │
+│  (fixed)         │                                                   │
+│                  │  ┌─[ Pre ]───────────────────────────────────┐   │
+│  Case list       │  │  Tab1: Analysis Conditions                │   │
+│  ─────────       │  │  Tab2: Grid Definition                    │   │
+│  ○ case_001     │  └───────────────────────────────────────────┘   │
+│  ○ case_002     │                                                   │
+│  ● case_003     │  ┌─[ Solve ]─────────────────────────────────┐   │
+│                  │  │  Run / Max iterations / Convergence /     │   │
+│  [+ New Case]    │  │  Convergence history                      │   │
+│  [Open Case]     │  └───────────────────────────────────────────┘   │
+│                  │                                                   │
+│                  │  ┌─[ Post ]──────────────────────────────────┐   │
+│                  │  │  Tab1: Graphs                             │   │
+│                  │  │  Tab2: Results Table                      │   │
+│                  │  └───────────────────────────────────────────┘   │
+└──────────────────┴───────────────────────────────────────────────────┘
+```
+
+### B.3 Left Panel — Case Management
+
+- [ ] The GUI shall display a list of all saved simulation cases.
+- [ ] The user shall be able to create a new case with a unique name.
+- [ ] The user shall be able to open (load) an existing case and restore its conditions.
+- [ ] The currently active case shall be visually highlighted.
+- [ ] Case state shall persist across sessions using a case-store backend.
+
+### B.4 Pre Tab 1 — Analysis Conditions
+
+The user shall be able to set all required simulation inputs through form controls:
+
+- [ ] Working fluid selection: `air` or `steam`.
+- [ ] Inlet total temperature $T_0$ (K).
+- [ ] Inlet total pressure $P_0$ (Pa).
+- [ ] Outlet static pressure $P_2$ (Pa).
+- [ ] Droplet injection conditions: initial velocity, mean diameter, maximum diameter.
+- [ ] Breakup model parameters: critical Weber number, breakup factor mean, breakup factor max.
+- [ ] Optional: inlet wetness (steam cases only).
+- [ ] Input validation shall be performed before the Solve tab becomes active.
+- [ ] All fields shall display SI unit labels.
+
+### B.5 Pre Tab 2 — Grid Definition
+
+- [ ] The user shall be able to define the axial domain extents ($x_{start}$, $x_{end}$) and cell count.
+- [ ] The user shall be able to enter a tabulated area distribution $(x, A)$ as an editable table.
+- [ ] The GUI shall display a preview plot of the area profile $A(x)$.
+- [ ] The GUI shall reject nonpositive area values with an inline error message.
+
+### B.6 Solve Tab — Solver Execution
+
+> **MVP note:** The quasi-1D solver uses a spatial marching method, not an iterative convergence loop. Maximum iteration count and convergence criterion controls are therefore not applicable in the MVP GUI. Run status and solver progress are reported through status messages and run completion indicators instead.
+
+- [ ] The GUI shall provide a **Run** button that invokes the simulation engine.
+- [ ] The GUI shall display solver progress or status during execution.
+- [ ] The GUI shall display a run-progress indicator showing whether a run is in progress or complete.
+- [ ] The GUI shall report solver completion status: success, validation outcome, and output location.
+- [ ] The GUI shall report solver errors in a user-readable format.
+- [ ] The Run button shall be disabled while a simulation is in progress.
+
+### B.7 Post Tab 1 — Graphs
+
+- [ ] The GUI shall display axial profile plots for all required MVP output quantities:
+  - pressure, temperature, working fluid velocity, droplet velocity,
+  - Mach number, droplet mean diameter, droplet maximum diameter, Weber number.
+- [ ] The user shall be able to select which quantities to display.
+- [ ] The plots shall update automatically after each completed run.
+- [ ] The user shall be able to export displayed plots as PNG files.
+
+### B.8 Post Tab 2 — Results Table
+
+- [ ] The GUI shall display a tabular view of all axial result fields.
+- [ ] The table shall be scrollable and show all $x$ positions.
+- [ ] The user shall be able to export the results table as CSV.
+
+### B.9 GUI Constraints
+
+- The GUI must not contain solver, physics, or config-parsing logic.
+- The GUI must invoke the existing application service boundary unchanged.
+- All computation remains in the existing Python solver engine.
+- The GUI layer must be replaceable without touching solver code.
+- The GUI must remain consistent with the existing YAML-based case representation internally.
+- Technology selection is deferred to architecture planning.
+
+### B.10 GUI Out of Scope
+
+- 3D visualization
+- Multi-case comparison view (may be added later)
+- Live/streaming solver output during execution
+- User authentication or multi-user support
+- Mobile layout
+
+### B.11 Unit Settings
+
+The GUI shall provide a configurable settings page for display units. All solver inputs and outputs remain in SI units internally; unit selection affects only what is displayed in the Post tabs.
+
+**Default display units and supported alternatives:**
+
+| Quantity group | Default | Alternatives |
+|---|---|---|
+| Pressure | kPa | Pa, MPa, bar |
+| Temperature | K | \u00b0C |
+| Velocity | m/s | \u2014 |
+| Droplet diameter | \u03bcm | m, mm, nm |
+| Axial position ($x$) | m | mm, cm |
+| Cross-section area | m\u00b2 | mm\u00b2, cm\u00b2 |
+| Density | kg/m\u00b3 | \u2014 |
+
+**Requirements:**
+
+- [ ] The GUI shall provide a settings page where the user can select display units for each quantity group.
+- [ ] Unit selection shall affect only display outputs (Post tab plots and results table).
+- [ ] All solver inputs and internal computations shall remain in SI units.
+- [ ] Pre-tab condition inputs shall be labeled and accepted in SI units only.
+- [ ] Display unit preferences shall persist within the current browser session.
+- [ ] The results table CSV export shall label column headers with the selected display unit (e.g. `pressure [kPa]`).
+- [ ] The unit settings page shall show the currently selected unit for each group and allow changes.

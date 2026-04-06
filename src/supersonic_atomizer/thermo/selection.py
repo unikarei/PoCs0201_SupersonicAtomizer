@@ -6,7 +6,10 @@ from supersonic_atomizer.common import ModelSelectionError
 from supersonic_atomizer.domain import CaseConfig
 from supersonic_atomizer.thermo.air import AirThermoProvider
 from supersonic_atomizer.thermo.interfaces import ThermoProvider
+from supersonic_atomizer.thermo.steam import SteamThermoProvider
 
+
+SUPPORTED_STEAM_BACKENDS = {None, "equilibrium_mvp", "if97_ready_equilibrium"}
 
 def select_thermo_provider(case_config: CaseConfig) -> ThermoProvider:
     """Select the configured thermo provider for the current foundation path."""
@@ -18,15 +21,12 @@ def select_thermo_provider(case_config: CaseConfig) -> ThermoProvider:
         return AirThermoProvider()
 
     if working_fluid == "steam":
-        if steam_property_model is not None:
+        if steam_property_model not in SUPPORTED_STEAM_BACKENDS:
             raise ModelSelectionError(
                 "Unsupported steam thermo backend selection: "
-                f"'{steam_property_model}' is not available in the current foundation path."
+                f"'{steam_property_model}' is not available in the supported MVP steam path."
             )
-
-        raise ModelSelectionError(
-            "Steam thermo selection is not yet available in the current foundation path."
-        )
+        return SteamThermoProvider()
 
     raise ModelSelectionError(
         f"Unsupported working fluid for thermo selection: '{working_fluid}'."

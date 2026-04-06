@@ -568,3 +568,347 @@ Phase 15 is done when a thin runtime application and CLI scaffold can accept a c
 ## Cross-Cycle Note
 
 These implementation phases establish the earliest executable foundation layers only. Gas solving, droplet transport, breakup execution, outputs, plotting, and full validation execution should be added in later task phases after these runtime foundations are complete and verified.
+
+---
+
+## Phase 16. Quasi-1D Gas Solver Runtime
+
+### Definition of Done
+
+Phase 16 is done when the supported executable foundation path can compute an axial gas solution from validated case inputs, runtime geometry/grid objects, and the thermo abstraction, with explicit diagnostics and focused tests for gas-only behavior.
+
+- [x] **P16-T01 — Create gas solver runtime module scaffold**
+  - **Purpose:** Establish the concrete runtime module structure for gas-side helpers, solver execution, and diagnostics without embedding logic into unrelated layers.
+  - **Dependencies:** P12-T02, P13-T05, P14-T04.
+  - **Completion criteria:** Runtime gas-solver modules and exports exist with responsibilities aligned to the architecture, and tests cover basic import/wiring behavior.
+
+- [x] **P16-T02 — Implement gas boundary-condition initialization for supported foundation cases**
+  - **Purpose:** Convert validated inlet total conditions and outlet static pressure into the supported gas-side initialization path for the executable MVP foundation.
+  - **Dependencies:** P16-T01, P5-T04, P14-T02.
+  - **Completion criteria:** Boundary-condition initialization exists for the supported air foundation path, and tests cover representative valid and invalid boundary-condition handling.
+
+- [x] **P16-T03 — Implement quasi-1D gas-state update utilities**
+  - **Purpose:** Realize the runtime helper calculations needed to update gas-side axial state using geometry and thermo-provider queries.
+  - **Dependencies:** P16-T01, P5-T03, P14-T01.
+  - **Completion criteria:** Runtime helper calculations exist for supported gas-state updates and Mach/velocity-related state assembly, and tests cover representative consistency behavior.
+
+- [x] **P16-T04 — Implement axial gas solver for supported executable cases**
+  - **Purpose:** Build the gas-solver execution path that returns a structured `GasSolution` across the runtime axial grid.
+  - **Dependencies:** P16-T02, P16-T03.
+  - **Completion criteria:** A runtime gas solver returns structured axial gas results for supported air cases, and tests cover constant-area gas-only and converging/diverging sanity cases.
+
+- [x] **P16-T05 — Implement gas diagnostics and failure propagation**
+  - **Purpose:** Ensure gas-side nonphysical states and incomplete solution progression surface explicitly through the approved runtime error categories and diagnostics path.
+  - **Dependencies:** P16-T04, P5-T05, P12-T04.
+  - **Completion criteria:** Gas-solver runtime failures surface through explicit diagnostics/error behavior, and tests cover nonphysical-state and incomplete-progression cases.
+
+---
+
+## Phase 17. Droplet Transport Runtime
+
+### Definition of Done
+
+Phase 17 is done when the executable foundation path can initialize representative droplets, evaluate slip/drag against the gas solution, march droplet state along the grid, and surface focused diagnostics through structured droplet results.
+
+- [x] **P17-T01 — Create droplet runtime module scaffold**
+  - **Purpose:** Establish the concrete runtime module structure for drag models, droplet update helpers, transport solving, and diagnostics.
+  - **Dependencies:** P12-T02, P16-T05.
+  - **Completion criteria:** Runtime droplet modules and exports exist with responsibilities aligned to the architecture, and tests cover basic import/wiring behavior.
+
+- [x] **P17-T02 — Implement standard-sphere drag model runtime path**
+  - **Purpose:** Provide the MVP drag-model execution path behind a runtime abstraction rather than hard-wiring drag logic directly into transport code.
+  - **Dependencies:** P17-T01, P6-T04.
+  - **Completion criteria:** The supported drag model can evaluate representative drag inputs, and tests cover representative valid and invalid evaluation cases.
+
+- [x] **P17-T03 — Implement droplet initialization and local update utilities**
+  - **Purpose:** Realize runtime initialization and per-step droplet update helpers using gas-state lookup, slip evaluation, and drag inputs.
+  - **Dependencies:** P17-T02, P6-T02, P6-T03.
+  - **Completion criteria:** Runtime droplet initialization and local update helpers exist, and tests cover zero-slip and slip-driven update behavior.
+
+- [x] **P17-T04 — Implement axial droplet transport solver**
+  - **Purpose:** Build the runtime droplet marching path that returns a structured `DropletSolution` aligned to the gas solution and axial grid.
+  - **Dependencies:** P17-T03, P6-T05.
+  - **Completion criteria:** A runtime droplet solver returns structured axial droplet results for supported cases, and tests cover representative transport cases without breakup enabled.
+
+- [x] **P17-T05 — Implement droplet diagnostics and failure propagation**
+  - **Purpose:** Ensure unstable or nonphysical droplet states surface explicitly through runtime diagnostics rather than appearing later as ambiguous downstream failures.
+  - **Dependencies:** P17-T04, P6-T06, P12-T04.
+  - **Completion criteria:** Runtime droplet failures surface through explicit diagnostics/error behavior, and tests cover negative/invalid droplet metrics and inconsistent state cases.
+
+---
+
+## Phase 18. Breakup Runtime
+
+### Definition of Done
+
+Phase 18 is done when the runtime breakup interface exists, the MVP Weber-threshold model executes behind that interface, and breakup decisions are integrated into the droplet transport path with focused tests.
+
+- [x] **P18-T01 — Create breakup runtime module scaffold and selector**
+  - **Purpose:** Establish the concrete runtime structure for breakup-model interfaces, runtime selection, and future model extension.
+  - **Dependencies:** P12-T02, P17-T05.
+  - **Completion criteria:** Runtime breakup modules and exports exist with responsibilities aligned to the architecture, and tests cover basic import/wiring and selection behavior.
+
+- [x] **P18-T02 — Implement runtime Weber number evaluation helper**
+  - **Purpose:** Realize the runtime Weber number calculation path used by the MVP breakup decision.
+  - **Dependencies:** P18-T01, P7-T02.
+  - **Completion criteria:** Runtime Weber number evaluation exists with SI-consistent inputs/outputs, and tests cover representative no-breakup and breakup-driving values.
+
+- [x] **P18-T03 — Implement critical-Weber breakup model runtime path**
+  - **Purpose:** Provide the executable MVP breakup behavior behind the runtime breakup-model abstraction.
+  - **Dependencies:** P18-T02, P7-T03.
+  - **Completion criteria:** The runtime Weber-threshold breakup model returns structured `BreakupDecision` outputs, and tests cover threshold and non-threshold cases.
+
+- [x] **P18-T04 — Integrate breakup execution into droplet transport runtime flow**
+  - **Purpose:** Apply breakup decisions at the approved point in the droplet update sequence without hard-wiring breakup logic across unrelated modules.
+  - **Dependencies:** P18-T03, P17-T04, P7-T05.
+  - **Completion criteria:** Droplet transport integrates runtime breakup behavior in the approved sequence, and tests cover diameter updates and breakup-flag propagation.
+
+- [x] **P18-T05 — Implement breakup diagnostics and runtime tests**
+  - **Purpose:** Ensure breakup-trigger and no-trigger behavior remain explicit, testable, and protected against regressions.
+  - **Dependencies:** P18-T04, P7-T06.
+  - **Completion criteria:** Breakup-specific runtime diagnostics/tests exist for threshold, no-threshold, and invalid-parameter behavior.
+
+---
+
+## Phase 19. Result Assembly, Outputs, and Plotting Runtime
+
+### Definition of Done
+
+Phase 19 is done when runtime gas and droplet solutions can be assembled into structured simulation results, exported to CSV/JSON, and plotted through isolated output modules with focused tests.
+
+- [x] **P19-T01 — Implement simulation-result assembly runtime path**
+  - **Purpose:** Assemble structured simulation results, metadata, and diagnostics from gas and droplet runtime outputs without recomputing physics in IO layers.
+  - **Dependencies:** P16-T05, P18-T05, P12-T03.
+  - **Completion criteria:** A runtime result-assembly path exists for supported executable cases, and tests cover field presence and alignment between gas and droplet outputs.
+
+- [x] **P19-T02 — Implement output-path and artifact-metadata helpers**
+  - **Purpose:** Centralize runtime output-path conventions and artifact metadata creation before CSV/JSON/plot writers are added.
+  - **Dependencies:** P19-T01, P1-T05.
+  - **Completion criteria:** Runtime output-path and artifact-metadata helpers exist, and tests cover representative output-directory and artifact-name behavior.
+
+- [x] **P19-T03 — Implement CSV writer runtime path**
+  - **Purpose:** Write structured axial results to CSV through the IO layer only.
+  - **Dependencies:** P19-T02, P8-T02.
+  - **Completion criteria:** A runtime CSV writer serializes supported result fields in the documented format, and tests cover representative file content and error behavior.
+
+- [x] **P19-T04 — Implement JSON writer runtime path**
+  - **Purpose:** Write structured simulation results and metadata to JSON through the IO layer only.
+  - **Dependencies:** P19-T02, P8-T03.
+  - **Completion criteria:** A runtime JSON writer serializes supported result and metadata fields in the documented format, and tests cover representative content and error behavior.
+
+- [x] **P19-T05 — Implement profile plotting runtime path**
+  - **Purpose:** Generate the required MVP profile plots from structured results only, keeping figure logic separate from solver code.
+  - **Dependencies:** P19-T01, P8-T04, P8-T05.
+  - **Completion criteria:** Runtime plot generation produces the required MVP plot set from structured results, and tests cover representative plotting invocation and failure behavior.
+
+---
+
+## Phase 20. Validation Runtime
+
+### Definition of Done
+
+Phase 20 is done when runtime validation can consume structured simulation results, execute the approved sanity/trend checks, and return structured validation summaries without coupling validation logic to solver internals.
+
+- [x] **P20-T01 — Create validation runtime module scaffold**
+  - **Purpose:** Establish the concrete runtime structure for validation checks, reporting helpers, and future reference-case extension.
+  - **Dependencies:** P12-T03, P19-T01.
+  - **Completion criteria:** Runtime validation modules and exports exist with responsibilities aligned to the architecture, and tests cover basic import/wiring behavior.
+
+- [x] **P20-T02 — Implement runtime sanity-check execution path**
+  - **Purpose:** Realize the initial validation checks that consume structured results and test approved gas/droplet/breakup trend expectations.
+  - **Dependencies:** P20-T01, P5-T06, P6-T07, P7-T06.
+  - **Completion criteria:** Runtime validation checks exist for the documented sanity cases and trend expectations, and tests cover representative pass/fail outcomes.
+
+- [x] **P20-T03 — Implement validation-report assembly runtime path**
+  - **Purpose:** Return structured validation summaries suitable for application orchestration and later user-facing reporting.
+  - **Dependencies:** P20-T02, P12-T03.
+  - **Completion criteria:** A runtime validation-report path exists, and tests cover summary counts, observations, and status behavior.
+
+- [x] **P20-T04 — Implement validation failure propagation behavior**
+  - **Purpose:** Ensure validation execution problems remain distinguishable from solver, output, or startup failures.
+  - **Dependencies:** P20-T03, P12-T04.
+  - **Completion criteria:** Validation runtime failures surface through the approved error categories/diagnostics behavior, and tests cover representative validation-execution failure cases.
+
+---
+
+## Phase 21. Steam Runtime Enablement
+
+### Definition of Done
+
+Phase 21 is done when the thermo abstraction supports an executable steam path for the approved MVP subset, selection can resolve that path explicitly, and at least one steam-oriented runtime case is testable without breaking the air foundation path.
+
+- [x] **P21-T01 — Implement runtime steam provider for the supported MVP subset**
+  - **Purpose:** Add the first executable steam-provider path behind the existing thermo abstraction while preserving clean future IF97 replacement/extension.
+  - **Dependencies:** P14-T04, P4-T03.
+  - **Completion criteria:** A runtime steam provider exists for the supported equilibrium MVP subset, and tests cover representative valid and invalid steam-state behavior.
+
+- [x] **P21-T02 — Extend thermo backend selection for supported steam cases**
+  - **Purpose:** Resolve the executable steam provider through the configuration-driven selection path rather than special-casing steam in solver code.
+  - **Dependencies:** P21-T01, P14-T03.
+  - **Completion criteria:** Runtime thermo selection resolves supported steam cases and rejects unsupported steam backend names explicitly, with tests for positive and negative selection behavior.
+
+- [x] **P21-T03 — Add steam runtime contract and integration tests**
+  - **Purpose:** Protect the executable steam path and preserve swappability expectations for the thermo layer.
+  - **Dependencies:** P21-T02, P4-T06.
+  - **Completion criteria:** Runtime thermo tests cover the supported steam path at interface and integration levels, including at least one steam-oriented startup or gas-only execution case.
+
+---
+
+## Phase 22. Full MVP Application Execution
+
+### Definition of Done
+
+Phase 22 is done when the application and CLI can execute the supported MVP runtime workflow end-to-end, including gas solving, droplet transport with breakup, validation, CSV/JSON writing, plotting, and concise user-facing run reporting.
+
+- [x] **P22-T01 — Extend application service to full simulation-run orchestration**
+  - **Purpose:** Replace startup-only orchestration with the full runtime sequence while preserving the thin CLI boundary and modular application service design.
+  - **Dependencies:** P16-T05, P18-T05, P19-T05, P20-T04.
+  - **Completion criteria:** The application service can execute the supported full runtime workflow and return structured run status/results, with tests for representative success and failure paths.
+
+- [x] **P22-T02 — Extend CLI from startup-only flow to full run flow**
+  - **Purpose:** Make the CLI invoke the supported end-to-end application path while keeping argument parsing and user-facing reporting thin.
+  - **Dependencies:** P22-T01, P15-T04.
+  - **Completion criteria:** The CLI can trigger the supported full run path and report concise run status, with tests for representative CLI success and failure behavior.
+
+- [x] **P22-T03 — Implement end-to-end air integration workflow test**
+  - **Purpose:** Protect the first executable MVP path from YAML case input through generated runtime artifacts.
+  - **Dependencies:** P22-T02, P19-T04.
+  - **Completion criteria:** An end-to-end integration test exists for a supported air case from YAML input through structured outputs/artifacts.
+
+- [x] **P22-T04 — Implement end-to-end steam-oriented integration workflow test**
+  - **Purpose:** Confirm that the executable MVP workflow can run a supported steam-oriented case through the same application and CLI boundaries.
+  - **Dependencies:** P21-T03, P22-T02.
+  - **Completion criteria:** An end-to-end integration test exists for a supported steam-oriented case from YAML input through structured outputs/artifacts.
+
+- [x] **P22-T05 — Reconcile examples and task-plan status with executable MVP behavior**
+  - **Purpose:** Align example cases and task tracking with the implemented runtime workflow once the executable MVP path is in place.
+  - **Dependencies:** P22-T03, P22-T04, P10-T01.
+  - **Completion criteria:** Example-case coverage and task-plan status are updated to reflect the supported executable MVP workflow without introducing out-of-scope behavior.
+
+---
+
+## Phase 23. GUI Layer
+
+### Definition of Done
+
+Phase 23 is done when the GUI application can launch in a browser or desktop window, manage cases through the left panel, accept all simulation conditions through Pre tabs, invoke the solver through the Solve tab, and display axial profile plots and a results table through Post tabs, with the existing application service boundary fully preserved and focused tests covering the GUI-specific logic.
+
+### Phase 23 Prerequisites
+
+- Phase 22 must be complete.
+- GUI technology selection must be documented and approved before any implementation task begins.
+- `app/services.py` must not be modified as part of this phase.
+
+---
+
+- [x] **P23-T01 — Select and document GUI technology**
+  - **Purpose:** Finalize the Python GUI framework before any module scaffolding begins, so all subsequent tasks use a consistent foundation.
+  - **Dependencies:** P22-T05.
+  - **Completion criteria:** The selected technology (e.g. Streamlit, Panel, Dash, or Tkinter) is documented with rationale, and any new runtime dependency is added to `pyproject.toml`. Technology constraints from [docs/architecture.md — Appendix B.7](architecture.md) are satisfied.
+  - **Decision:** **Streamlit** selected. Rationale and candidate comparison documented in [docs/architecture.md — Appendix B.7.1](architecture.md). Dependency `streamlit==1.56.0` added to `pyproject.toml` via `uv add streamlit`.
+
+- [x] **P23-T02 — Create GUI package scaffold and service bridge**
+  - **Purpose:** Establish the `gui/` package structure and the `service_bridge.py` boundary that isolates all application service calls from GUI page logic.
+  - **Dependencies:** P23-T01.
+  - **Completion criteria:** The `gui/` package exists with the documented module layout; `service_bridge.py` wraps `ApplicationService`; tests cover import wiring and bridge call delegation.
+
+- [x] **P23-T03 — Implement case store**
+  - **Purpose:** Provide persistent case management (create, list, load, save) backed by YAML files in the `cases/` directory, using the existing config format.
+  - **Dependencies:** P23-T02, P11-T06.
+  - **Completion criteria:** `case_store.py` can create, list, load, and save cases; tests cover round-trip persistence and invalid-case handling.
+
+- [x] **P23-T04 — Implement left panel — case management**
+  - **Purpose:** Render the fixed left panel showing the case list, new-case creation, and open-case loading using the case store.
+  - **Dependencies:** P23-T03.
+  - **Completion criteria:** The left panel displays the case list, allows new case creation, and loads an existing case into GUI state; tests cover case selection and state update behavior.
+
+- [x] **P23-T05 — Implement Pre Tab 1 — analysis conditions form**
+  - **Purpose:** Provide form controls for all required simulation inputs (fluid, $T_0$, $P_0$, $P_2$, droplet injection, breakup parameters) with inline SI unit labels and validation.
+  - **Dependencies:** P23-T04.
+  - **Completion criteria:** All required condition fields are present with correct labels and validation; invalid inputs produce inline error messages; the form writes to GUI state correctly; tests cover field presence, validation behavior, and state updates.
+
+- [x] **P23-T06 — Implement Pre Tab 2 — grid definition and area preview**
+  - **Purpose:** Provide an editable $(x, A)$ table for area distribution input and a live area profile preview plot.
+  - **Dependencies:** P23-T04.
+  - **Completion criteria:** The grid table accepts tabulated area data; the preview plot updates when the table changes; nonpositive area values are rejected with inline errors; tests cover table editing and preview update behavior.
+
+- [x] **P23-T07 — Implement Solve tab — run control and convergence display**
+  - **MVP note:** Convergence controls (max iterations, convergence criterion) are not applicable because the quasi-1D solver uses a spatial marching method, not an iterative loop. Convergence display is replaced by a run-progress status indicator per the spec.md B.6 update.
+  - **Purpose:** Provide the Run button, convergence settings, solver status reporting, and convergence history display.
+  - **Dependencies:** P23-T05, P23-T06.
+  - **Completion criteria:** The Run button invokes the solver through `service_bridge.py` in a non-blocking manner; status and completion outcome are displayed; the convergence history plot updates after the run; the Run button is disabled during execution; solver errors are reported in a user-readable format; tests cover run invocation, status update, and error reporting.
+
+- [x] **P23-T08 — Implement Post Tab 1 — axial profile plots**
+  - **Purpose:** Display the required axial profile plots from structured simulation results without recomputing physics in the GUI layer.
+  - **Dependencies:** P23-T07.
+  - **Completion criteria:** All required MVP profile plots are rendered from `SimulationResult` data; the user can select which quantities to display; plots update after each completed run; PNG export is available; tests cover plot rendering from a representative result object.
+
+- [x] **P23-T09 — Implement Post Tab 2 — results table and CSV export**
+  - **Purpose:** Display a scrollable tabular view of all axial result fields and allow CSV export.
+  - **Dependencies:** P23-T07.
+  - **Completion criteria:** The results table shows all axial fields for the completed run; CSV export produces a valid file; tests cover table population from a representative result object and export behavior.
+
+- [x] **P23-T10 — Implement GUI application entry point and layout assembly**
+  - **Purpose:** Assemble all panels and pages into the documented top-level layout and provide a launchable GUI entry point.
+  - **Dependencies:** P23-T04 through P23-T09.
+  - **Completion criteria:** The GUI launches from a single entry command; left panel and all tabs are reachable and functional; tests cover launch wiring and layout composition.
+
+- [x] **P23-T11 — Add GUI launcher scripts**
+  - **Purpose:** Provide `run20_gui.bat` and `run20_gui.sh` launcher scripts consistent with the existing helper script conventions.
+  - **Dependencies:** P23-T10.
+  - **Completion criteria:** Launcher scripts exist for Windows and POSIX, invoke the GUI entry point via `uv run`, and are documented in `README.md`.
+
+- [x] **P23-T12 — Add GUI integration tests**
+  - **Purpose:** Protect the GUI-to-service boundary and case store behavior against regressions.
+  - **Dependencies:** P23-T10.
+  - **Completion criteria:** Integration tests cover the full path from case load through solver invocation through result display for a representative air case, without requiring a live browser session.
+
+---
+
+## Phase 24. GUI Unit Settings
+
+### Definition of Done
+
+Phase 24 is done when the GUI has a configurable unit-settings page that applies user-selected display units to all Post tab outputs (plots and results table), unit conversion helpers are covered by focused tests, all SI boundaries are preserved in Pre tabs and solver layers, and the settings tab is integrated into the documented layout.
+
+### Phase 24 Prerequisites
+
+- Phase 23 must be complete.
+- `app/services.py`, `domain/`, `solvers/`, `thermo/`, `io/`, `plotting/` must not be modified as part of this phase.
+
+---
+
+- [x] **P24-T01 — Update spec and architecture for unit settings**
+  - **Purpose:** Add unit settings requirements to spec.md (B.11) and the unit conversion boundary rule to architecture.md (B.9) before any implementation begins.
+  - **Dependencies:** P23-T12.
+  - **Completion criteria:** spec.md B.11 and architecture.md B.9 are present with documented defaults, alternatives, and boundary rules.
+
+- [x] **P24-T02 — Implement unit conversion module**
+  - **Purpose:** Create `gui/unit_settings.py` with all unit-group definitions, conversion factors, and formatting helpers behind a clean testable boundary.
+  - **Dependencies:** P24-T01.
+  - **Completion criteria:** `gui/unit_settings.py` exists with `UNIT_GROUPS`, `DEFAULT_UNITS`, `FIELD_UNIT_GROUP`, `convert_value`, `convert_series`, `display_unit_label`, and `field_display_label`; tests cover representative conversion and formatting behavior.
+
+- [x] **P24-T03 — Add unit preference fields to GUIState**
+  - **Purpose:** Store per-group unit preferences as named fields in `GUIState` and expose them through a `unit_preferences()` helper.
+  - **Dependencies:** P24-T02.
+  - **Completion criteria:** `GUIState` has one `str` field per quantity group with documented defaults, and `unit_preferences()` returns a compatible dict; tests verify default values and mutation behavior.
+
+- [x] **P24-T04 — Implement unit settings page**
+  - **Purpose:** Provide a settings page with selectboxes for each unit group, calling only `gui/unit_settings.py` and `GUIState` helpers.
+  - **Dependencies:** P24-T03.
+  - **Completion criteria:** `gui/pages/unit_settings_page.py` exists with `get_unit_choices`, `apply_unit_preference`, `get_unit_preference`, and `render_unit_settings`; tests cover helper behavior without a Streamlit session.
+
+- [x] **P24-T05 — Apply unit conversions in Post tab display**
+  - **Purpose:** Update `post_graphs.py` and `post_table.py` to apply conversions from `state.unit_preferences()` while preserving backward compatibility when no preferences are provided.
+  - **Dependencies:** P24-T04.
+  - **Completion criteria:** `extract_plot_series` and `result_to_table_rows` accept an optional `unit_preferences` parameter; display values and labels reflect the selected units; all existing tests continue to pass.
+
+- [x] **P24-T06 — Add unit settings tab to layout**
+  - **Purpose:** Integrate the unit settings page into the documented top-level tab layout as a `⚙ Settings` tab.
+  - **Dependencies:** P24-T04, P24-T05.
+  - **Completion criteria:** The layout renders a Settings tab that calls `render_unit_settings()`; the existing tabs are unaffected.
+
+- [x] **P24-T07 — Tests for unit conversion helpers and integration**
+  - **Purpose:** Cover the unit conversion module, GUIState preference fields, page helpers, and the Post tab display helpers with unit preferences applied.
+  - **Dependencies:** P24-T05, P24-T06.
+  - **Completion criteria:** A focused test file covers all `gui/unit_settings.py` helpers, `GUIState` unit fields, `unit_settings_page.py` helpers, and `extract_plot_series` / `result_to_table_rows` with non-default unit preferences; all 117+ existing GUI tests continue to pass.

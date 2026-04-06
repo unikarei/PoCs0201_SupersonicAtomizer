@@ -1,4 +1,4 @@
-"""Thin command-line entry scaffold for startup-stage application handoff."""
+"""Thin command-line entry for full MVP application execution."""
 
 from __future__ import annotations
 
@@ -8,12 +8,17 @@ import sys
 from typing import TextIO
 from typing import Sequence
 
-from supersonic_atomizer.app import ApplicationService, StartupResult, get_application_service
+from supersonic_atomizer.app import (
+    ApplicationService,
+    SimulationRunResult,
+    StartupResult,
+    get_application_service,
+)
 
 
 @dataclass(frozen=True, slots=True)
 class CLIOptions:
-    """Parsed CLI options for the current startup-stage command boundary."""
+    """Parsed CLI options for the current command boundary."""
 
     case_path: str
     startup_only: bool = False
@@ -24,7 +29,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     parser = argparse.ArgumentParser(
         prog="supersonic-atomizer",
-        description="Run the Supersonic Atomizer startup-stage workflow.",
+        description="Run the Supersonic Atomizer simulation workflow.",
     )
     parser.add_argument("case_path", help="Path to the YAML case file.")
     parser.add_argument(
@@ -49,12 +54,16 @@ def main(
     argv: Sequence[str] | None = None,
     *,
     application_service: ApplicationService | None = None,
-) -> StartupResult:
+) -> StartupResult | SimulationRunResult:
     """Parse CLI inputs and hand off to the application service boundary."""
 
     options = parse_cli_args(argv)
     service = application_service or get_application_service()
-    return service.run_startup(options.case_path)
+
+    if options.startup_only:
+        return service.run_startup(options.case_path)
+
+    return service.run_simulation(options.case_path)
 
 
 def format_startup_report(startup_result: StartupResult) -> str:
@@ -83,6 +92,33 @@ def format_startup_report(startup_result: StartupResult) -> str:
     return f"{prefix}: {startup_result.failure_message}"
 
 
+def format_run_report(run_result: SimulationRunResult) -> str:
+    """Format concise user-facing run status for CLI reporting."""
+
+    if run_result.status == "completed":
+        parts = [f"Simulation completed: case={run_result.case_path}"]
+
+        if run_result.simulation_result is not None:
+            parts.append(f"fluid={run_result.simulation_result.working_fluid}")
+            if run_result.simulation_result.validation_report is not None:
+                vr = run_result.simulation_result.validation_report
+                parts.append(f"validation={vr.status} ({vr.checks_passed}/{vr.checks_run} passed)")
+            if run_result.simulation_result.output_metadata is not None:
+                parts.append(f"output_dir={run_result.simulation_result.output_metadata.output_directory}")
+
+        return "; ".join(parts) + "."
+
+    if run_result.status == "output-failed":
+        return (
+            f"Simulation ran but output failed: case={run_result.case_path}; "
+            f"stage={run_result.failure_stage}; {run_result.failure_message}"
+        )
+
+    # Generic failure
+    stage_info = f"; stage={run_result.failure_stage}" if run_result.failure_stage else ""
+    return f"Simulation failed: case={run_result.case_path}{stage_info}; {run_result.failure_message}"
+
+
 def run_cli(
     argv: Sequence[str] | None = None,
     *,
@@ -90,14 +126,22 @@ def run_cli(
     stdout: TextIO | None = None,
     stderr: TextIO | None = None,
 ) -> int:
-    """Run the CLI startup flow and write concise user-facing reporting."""
+    """Run the CLI flow and write concise user-facing reporting."""
 
-    startup_result = main(argv, application_service=application_service)
-    output = format_startup_report(startup_result)
+    result = main(argv, application_service=application_service)
 
-    if startup_result.status == "ready":
+    if isinstance(result, StartupResult):
+        output = format_startup_report(result)
+        if result.status == "ready":
+            (stdout or sys.stdout).write(output + "\n")
+            return 0
+        (stderr or sys.stderr).write(output + "\n")
+        return 1
+
+    # SimulationRunResult
+    output = format_run_report(result)
+    if result.status == "completed":
         (stdout or sys.stdout).write(output + "\n")
         return 0
-
     (stderr or sys.stderr).write(output + "\n")
     return 1

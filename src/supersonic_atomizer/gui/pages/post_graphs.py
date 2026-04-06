@@ -1,0 +1,117 @@
+"""Post Tab 1 — axial profile plots (P23-T08, updated P24-T05)."""
+
+from __future__ import annotations
+
+from typing import Any
+
+from supersonic_atomizer.domain import SimulationResult
+from supersonic_atomizer.gui.unit_settings import (
+    DEFAULT_UNITS,
+    convert_series,
+    display_unit_label,
+)
+
+
+PLOT_FIELDS: dict[str, tuple[str, str, str]] = {
+    "pressure":               ("Pressure",               "pressure",   "Pa"),
+    "temperature":            ("Temperature",            "temperature", "K"),
+    "working_fluid_velocity": ("Working-fluid velocity", "velocity",   "m/s"),
+    "droplet_velocity":       ("Droplet velocity",       "velocity",   "m/s"),
+    "Mach_number":            ("Mach number",            None,         "-"),
+    "droplet_mean_diameter":  ("Droplet mean diameter",  "diameter",   "m"),
+    "droplet_maximum_diameter": ("Droplet maximum diameter", "diameter", "m"),
+    "Weber_number":           ("Weber number",           None,         "-"),
+}
+
+
+def extract_plot_series(
+    simulation_result: SimulationResult,
+    unit_preferences: dict[str, str] | None = None,
+) -> dict[str, dict[str, Any]]:
+    """Extract plot-ready axial series from a SimulationResult.
+
+    Parameters
+    ----------
+    simulation_result:
+        The completed simulation result.
+    unit_preferences:
+        Optional mapping of unit-group name to display unit label (from
+        ``GUIState.unit_preferences()``).  When ``None`` all values are
+        returned in SI units with SI axis labels — preserving backward
+        compatibility with existing tests.
+    """
+
+    def _convert(si_values: list[float], group: str | None) -> tuple[list[float], str]:
+        """Return (display_values, unit_label)."""
+        if group is None:
+            return list(si_values), "-"
+        if unit_preferences is not None:
+            return (
+                convert_series(list(si_values), group, unit_preferences),
+                display_unit_label(group, unit_preferences),
+            )
+        return list(si_values), DEFAULT_UNITS.get(group, "")
+
+    x_si = list(simulation_result.gas_solution.x_values)
+    x_disp, x_unit = _convert(x_si, "length")
+    x_label = f"x ({x_unit})"
+
+    def _entry(si_values, group: str | None, title: str) -> dict[str, Any]:
+        y, unit = _convert(list(si_values), group)
+        ylabel = f"{title} ({unit})" if unit != "-" else f"{title} (-)"
+        return {"x": x_disp, "y": y, "ylabel": ylabel, "title": title, "x_label": x_label}
+
+    return {
+        "pressure":               _entry(simulation_result.gas_solution.pressure_values,                          "pressure",    "Pressure"),
+        "temperature":            _entry(simulation_result.gas_solution.temperature_values,                       "temperature", "Temperature"),
+        "working_fluid_velocity": _entry(simulation_result.gas_solution.velocity_values,                          "velocity",    "Working-fluid velocity"),
+        "droplet_velocity":       _entry(simulation_result.droplet_solution.velocity_values,                      "velocity",    "Droplet velocity"),
+        "Mach_number":            _entry(simulation_result.gas_solution.mach_number_values,                       None,          "Mach number"),
+        "droplet_mean_diameter":  _entry(simulation_result.droplet_solution.mean_diameter_values,                 "diameter",    "Droplet mean diameter"),
+        "droplet_maximum_diameter": _entry(simulation_result.droplet_solution.maximum_diameter_values,            "diameter",    "Droplet maximum diameter"),
+        "Weber_number":           _entry(simulation_result.droplet_solution.weber_number_values,                  None,          "Weber number"),
+    }
+
+
+def render_post_graphs() -> None:
+    """Render the Post Tab 1 axial profile plots with user-selected display units."""
+    import io
+
+    import matplotlib.pyplot as plt
+    import streamlit as st
+
+    state = st.session_state.gui_state
+    if state.last_run_result is None or state.last_run_result.simulation_result is None:
+        st.info("Run a simulation to display plots.")
+        return
+
+    result = state.last_run_result.simulation_result
+    prefs = state.unit_preferences()
+    series = extract_plot_series(result, prefs)
+
+    selected = st.multiselect(
+        "Quantities to display",
+        options=list(PLOT_FIELDS.keys()),
+        default=list(PLOT_FIELDS.keys()),
+    )
+
+    for key in selected:
+        data = series[key]
+        fig, ax = plt.subplots(figsize=(6, 3))
+        ax.plot(data["x"], data["y"])
+        ax.set_xlabel(data["x_label"])
+        ax.set_ylabel(data["ylabel"])
+        ax.set_title(data["title"])
+        ax.grid(True, alpha=0.3)
+        st.pyplot(fig)
+
+        buffer = io.BytesIO()
+        fig.savefig(buffer, format="png", bbox_inches="tight")
+        st.download_button(
+            label=f"Export {key} as PNG",
+            data=buffer.getvalue(),
+            file_name=f"{key}.png",
+            mime="image/png",
+        )
+        plt.close(fig)
+
