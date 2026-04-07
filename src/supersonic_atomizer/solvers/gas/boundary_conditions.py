@@ -20,9 +20,15 @@ def _extract_heat_capacity_ratio(thermo_provider: ThermoProvider) -> float:
     return float(gamma)
 
 
+def _compute_critical_pressure_ratio(heat_capacity_ratio: float) -> float:
+    return (2.0 / (heat_capacity_ratio + 1.0)) ** (
+        heat_capacity_ratio / (heat_capacity_ratio - 1.0)
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class GasBoundaryConditionState:
-    """Derived gas-side boundary state for the current subsonic foundation path."""
+    """Derived gas-side boundary state for the current quasi-1D gas runtime path."""
 
     total_pressure: float
     total_temperature: float
@@ -50,15 +56,18 @@ def initialize_gas_boundary_conditions(
 
     gamma = _extract_heat_capacity_ratio(thermo_provider)
     outlet_pressure_ratio = boundary_conditions.Ps_out / boundary_conditions.Pt_in
-    outlet_mach_number = math.sqrt(
-        (2.0 / (gamma - 1.0))
-        * ((1.0 / outlet_pressure_ratio) ** ((gamma - 1.0) / gamma) - 1.0)
-    )
+    critical_pressure_ratio = _compute_critical_pressure_ratio(gamma)
+    if outlet_pressure_ratio <= critical_pressure_ratio:
+        outlet_mach_number = 1.0
+    else:
+        outlet_mach_number = math.sqrt(
+            (2.0 / (gamma - 1.0))
+            * ((1.0 / outlet_pressure_ratio) ** ((gamma - 1.0) / gamma) - 1.0)
+        )
 
-    if not (0.0 < outlet_mach_number < 1.0):
+    if outlet_mach_number <= 0.0 or not math.isfinite(outlet_mach_number):
         raise NumericalError(
-            "Failed gas boundary closure: current foundation path supports only subsonic "
-            f"outlet solutions, but derived outlet Mach was {outlet_mach_number:.6f}."
+            "Failed gas boundary closure: derived outlet Mach number is nonphysical for the supplied pressure ratio."
         )
 
     return GasBoundaryConditionState(

@@ -49,6 +49,18 @@ uv run supersonic-atomizer examples/air_nozzle.yaml
 uv run supersonic-atomizer examples/steam_nozzle.yaml
 ```
 
+#### Run the Laval-Nozzle Sweep
+
+```bash
+uv run supersonic-atomizer laval-sweep examples/laval_nozzle_air.yaml
+```
+
+This command generates:
+
+- an internal-flow textbook comparison plot for $x$ vs $p/p_0$,
+- a sweep summary JSON file,
+- an automated Markdown validation report for the `b`, `d`, `g`, `h`, `j`, and `k` internal regimes.
+
 > `uv run` automatically uses the project's virtual environment — no manual activation needed.
 
 #### Launch the GUI
@@ -67,8 +79,31 @@ run20_gui.bat
 ./run20_gui.sh
 ```
 
-The GUI opens in your default browser. Use it to create cases, set simulation
-conditions, run the solver, and view results — without editing YAML directly.
+The GUI opens in your default browser at **http://127.0.0.1:8501**. Use it to
+create cases, set simulation conditions, run the solver, and view results —
+without editing YAML directly.
+
+#### FastAPI GUI (port 8502)
+
+An alternative browser-based GUI implemented with FastAPI + vanilla JavaScript:
+
+```bash
+uv run uvicorn supersonic_atomizer.gui.fastapi_app:app --host 127.0.0.1 --port 8502 --reload
+```
+
+Or use the helper script:
+
+```bash
+# Windows
+run21_fastapi_gui.bat
+
+# POSIX
+./run21_fastapi_gui.sh
+```
+
+Opens at **http://127.0.0.1:8502**. Provides the same six-tab interface
+(Conditions, Grid, Solve, Graphs, Table, Settings) as the Streamlit GUI through
+a REST API backend with JSON polling — no Streamlit dependency required at runtime.
 
 #### Run Tests
 
@@ -88,7 +123,8 @@ run11_uv_run.bat examples\air_nozzle.yaml
 run12_uv_test.bat
 run13_uv_add.bat numpy
 run14_uv_add_dev.bat ruff
-run20_gui.bat
+run20_gui.bat              :: Streamlit GUI  (port 8501)
+run21_fastapi_gui.bat      :: FastAPI GUI    (port 8502)
 ```
 
 #### POSIX `.sh`
@@ -99,13 +135,14 @@ run20_gui.bat
 ./run12_uv_test.sh
 ./run13_uv_add.sh numpy
 ./run14_uv_add_dev.sh ruff
-./run20_gui.sh
+./run20_gui.sh             # Streamlit GUI  (port 8501)
+./run21_fastapi_gui.sh     # FastAPI GUI    (port 8502)
 ```
 
 On Linux or macOS, make the shell scripts executable once if needed:
 
 ```bash
-chmod +x run10_uv_sync.sh run11_uv_run.sh run12_uv_test.sh run13_uv_add.sh run14_uv_add_dev.sh run20_gui.sh
+chmod +x run10_uv_sync.sh run11_uv_run.sh run12_uv_test.sh run13_uv_add.sh run14_uv_add_dev.sh run20_gui.sh run21_fastapi_gui.sh
 ```
 
 ### 4. Check Outputs

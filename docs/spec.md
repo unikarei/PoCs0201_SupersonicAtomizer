@@ -115,6 +115,8 @@ These items may be considered in later releases only after the MVP is validated.
 
 - [x] The simulator shall solve a steady quasi-1D compressible flow problem along the axial coordinate.
 - [x] The simulator shall compute axial distributions of pressure, temperature, density, velocity, and Mach number.
+- [x] For supported converging-diverging Laval nozzle geometries, the simulator shall support choking-aware branch selection between subsonic and supersonic internal solutions.
+- [x] For supported converging-diverging Laval nozzle geometries, the simulator shall support one internal normal shock located within the nozzle diverging section when required by outlet static pressure.
 - [x] The simulator shall support a fluid property abstraction that allows air and steam implementations.
 - [x] The steam implementation shall be designed to support IF97-based properties.
 - [x] The first release shall assume equilibrium steam behavior.
@@ -349,6 +351,7 @@ Validation shall be defined explicitly as part of development. The MVP shall inc
 
 - Constant-area single-phase gas case with no droplets
 - Smooth converging/diverging area-profile sanity case
+- Laval-nozzle internal-flow case spanning subsonic, internal-normal-shock, exit-shock-limit, and fully supersonic internal solution families under varying back pressure
 - Droplet case with zero initial slip or near-zero slip
 - Droplet case with increasing relative velocity that triggers breakup
 - At least one steam case using the selected IF97-oriented property interface assumptions
@@ -436,7 +439,7 @@ The project should eventually include:
 9. What minimum validation references are acceptable for steam cases in the absence of experimental breakup data?
    - **Resolved:** Trend-based validation is used: gas-solution completeness, slip-driven acceleration, breakup threshold behavior. No experimental reference data required for MVP.
 10. Should choking and supersonic branch handling be mandatory in MVP, or allowed only if needed by approved cases?
-    - **Resolved:** Choking-aware branch selection is not implemented. The MVP subsonic foundation path rejects area ratios ≤ 1.0 with an explicit `NumericalError`.
+   - **Resolved:** Choking-aware branch selection is implemented for supported converging-diverging Laval nozzle geometries. The runtime gas solver supports subsonic internal solutions, fully supersonic internal solutions, and one fitted internal normal shock in the diverging section. Downstream external-jet shock cells, oblique shocks, and expansion fans remain out of scope.
 
 ### 14.2 Working Assumptions Until Resolved
 

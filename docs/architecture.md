@@ -156,6 +156,7 @@ Responsibilities:
 
 - solve steady quasi-1D gas flow along the axial grid,
 - compute gas pressure, temperature, density, velocity, and Mach number,
+- select the appropriate internal branch for supported converging-diverging Laval nozzles (subsonic, choked/supersonic, or one internal normal-shock-fitted branch),
 - use thermo-provider interfaces rather than direct property formulas where possible,
 - surface numerical diagnostics and failure conditions.
 
@@ -421,7 +422,7 @@ The application should execute in the following sequence:
 5. Build area profile and axial grid.
 6. Select thermo backend based on fluid and model settings.
 7. Select breakup model implementation.
-8. Run gas solver.
+8. Run gas solver, including choking-aware branch selection and optional internal normal-shock fitting for supported Laval-nozzle cases.
 9. Initialize droplet state at inlet or injection location.
 10. March droplet solution along the gas-state field.
 11. At each step, compute slip-driven quantities and call breakup model as needed.
@@ -693,6 +694,7 @@ The gas solver package should allow later addition of:
 
 - loss models,
 - choking-aware branches,
+- fitted internal normal shocks for supported Laval nozzles,
 - alternative quasi-1D formulations,
 - iterative two-way coupling.
 
@@ -728,7 +730,7 @@ Steam property integration may introduce complexity in valid-state handling, dep
 
 ### 14.2 Numerical Robustness Risk
 
-Quasi-1D compressible flow with strong pressure ratios, possible choking, and simplified closure assumptions may lead to unstable or ambiguous branches if not carefully bounded.
+Quasi-1D compressible flow with strong pressure ratios, possible choking, fitted internal shocks, and simplified closure assumptions may lead to unstable or ambiguous branches if not carefully bounded.
 
 ### 14.3 Model-Coupling Risk
 
@@ -897,6 +899,61 @@ cases/               ← default case-store directory
 
 **Non-blocking design resolution (risk B.8):**
 The solver is invoked in a background `threading.Thread`. Completion status and results are stored in `st.session_state`. The UI polls state on rerun. The Run button is disabled by a session-state flag while the thread is alive.
+
+> **Note (Phase 25):** Streamlit was the Phase 23 implementation. Phase 25 replaces the Streamlit front-end with FastAPI. See B.7.2 for the updated technology selection.
+
+### B.7.2 Selected Technology: FastAPI (decided — P25-T01)
+
+**Selected framework:** FastAPI + uvicorn + Jinja2 templates
+
+**Version added:** `fastapi>=0.115`, `uvicorn[standard]>=0.30`, `jinja2>=3.1` (added via `uv add`)
+
+**Rationale:**
+
+| Constraint | FastAPI assessment |
+|---|---|
+| Python-only developer API | All server-side code is pure Python; no Node.js build process required. |
+| No separate non-Python server | Uvicorn is a pure-Python ASGI server; no external non-Python process. |
+| Tabular input | HTML `<table>` with editable `<input>` elements; no framework dependency. |
+| Form controls | Standard HTML form elements rendered by Jinja2 templates. |
+| Matplotlib rendering | Figures serialised to base64 PNG and embedded in `<img>` tags via JSON API. |
+| Browser-based | Launches in the default browser via uvicorn on localhost. |
+| Non-blocking solver | `threading.Thread` started by `/api/simulation/run`; client polls `/api/simulation/status/{job_id}`. |
+| REST API separation | Clean JSON API boundary keeps front-end logic separate from solver logic. |
+
+**Rejected alternatives (Phase 25):**
+
+- **Streamlit (Phase 23):** Suitable for rapid PoC; retained and not removed. Phase 25 adds FastAPI as an alternative entry point.
+- **Dash:** Uses a JavaScript/React front-end internally; adds complexity without benefit over FastAPI for this use case.
+- **Panel:** More flexible but more complex API; no benefit over FastAPI REST for this use case.
+
+**Module additions (Phase 25):**
+
+| Module | Responsibility |
+|---|---|
+| `gui/fastapi_app.py` | FastAPI application factory; mounts routers and static files |
+| `gui/schemas.py` | Pydantic request/response schemas |
+| `gui/job_store.py` | In-memory simulation job store (thread-safe) |
+| `gui/session_store.py` | In-memory server-side session store keyed by cookie |
+| `gui/plot_utils.py` | Matplotlib figure → base64 PNG conversion helpers |
+| `gui/dependencies.py` | FastAPI `Depends` helpers for session resolution |
+| `gui/routers/index_router.py` | `GET /` → main HTML page |
+| `gui/routers/cases_router.py` | Case CRUD REST endpoints |
+| `gui/routers/simulation_router.py` | Simulation run/status/result REST endpoints |
+| `gui/routers/units_router.py` | Unit preference REST endpoints |
+| `gui/templates/index.html` | Jinja2 main HTML template |
+| `gui/static/app.css` | Application stylesheet |
+| `gui/static/app.js` | Vanilla JavaScript client logic |
+
+**Reused unchanged (Phase 25):**
+`gui/case_store.py`, `gui/service_bridge.py`, `gui/unit_settings.py`, `gui/state.py`,
+`gui/pages/post_graphs.py` (`extract_plot_series`), `gui/pages/post_table.py` (`result_to_table_rows`, `generate_csv_content`),
+`gui/pages/pre_conditions.py`, `gui/pages/pre_grid.py`, `gui/pages/solve.py`, `gui/panels/case_panel.py`.
+
+**Non-blocking design resolution (Phase 25):**
+The solver is invoked in a `threading.Thread` started by `/api/simulation/run`. The job result is stored in
+`JobStore` keyed by `job_id`. The browser polls `/api/simulation/status/{job_id}` every 800 ms until the
+status changes to `completed` or `failed`, then fetches `/api/simulation/result/{job_id}`.
 
 ### B.8 GUI Technical Risks
 

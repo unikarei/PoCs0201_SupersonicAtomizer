@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Supersonic Atomizer Simulator</title>
+  <link rel="stylesheet" href="/static/app.css" />
+</head>
+<body>
+
+<!-- ── Layout ──────────────────────────────────────────────────────────────── -->
+<div class="layout">
+
+  <!-- Left panel: case management -->
+  <aside class="left-panel">
+    <h2>Cases</h2>
+    <ul id="case-list" class="case-list"></ul>
+    <div class="case-actions">
+      <input id="new-case-name" type="text" placeholder="case name" />
+      <button id="btn-new-case">＋ New</button>
+      <button id="btn-refresh-cases">↺ Refresh</button>
+    </div>
+    <div id="case-error" class="error-msg hidden"></div>
+    <hr />
+    <p id="active-case-label" class="active-case">No case selected</p>
+  </aside>
+
+  <!-- Main area -->
+  <main class="main-area">
+
+    <!-- Tab bar -->
+    <nav class="tab-bar">
+      <button class="tab-btn active" data-tab="pre-conditions">📋 Conditions</button>
+      <button class="tab-btn" data-tab="pre-grid">📐 Grid</button>
+      <button class="tab-btn" data-tab="solve">▶ Solve</button>
+      <button class="tab-btn" data-tab="post-graphs">📈 Graphs</button>
+      <button class="tab-btn" data-tab="post-table">📊 Table</button>
+      <button class="tab-btn" data-tab="settings">⚙ Settings</button>
+    </nav>
+
+    <!-- ── Pre Tab 1: Analysis Conditions ──────────────────────────────────── -->
+    <section id="tab-pre-conditions" class="tab-content active">
+      <h3>Analysis Conditions</h3>
+      <form id="conditions-form">
+        <fieldset>
+          <legend>Working Fluid</legend>
+          <label>Fluid
+            <select name="working_fluid">
+              <option value="air">Air</option>
+              <option value="steam">Steam</option>
+            </select>
+          </label>
+          <label>Inlet wetness (steam only, optional)
+            <input type="number" name="inlet_wetness" step="0.001" min="0" max="1" placeholder="e.g. 0.05" />
+          </label>
+        </fieldset>
+
+        <fieldset>
+          <legend>Boundary Conditions</legend>
+          <label>Inlet total pressure P₀ [Pa]
+            <input type="number" name="Pt_in" step="1" min="0" required value="200000" />
+          </label>
+          <label>Inlet total temperature T₀ [K]
+            <input type="number" name="Tt_in" step="0.1" min="0" required value="400" />
+          </label>
+          <label>Outlet static pressure P₂ [Pa]
+            <input type="number" name="Ps_out" step="1" min="0" required value="101325" />
+          </label>
+        </fieldset>
+
+        <fieldset>
+          <legend>Droplet Injection</legend>
+          <label>Initial droplet velocity [m/s]
+            <input type="number" name="droplet_velocity_in" step="0.01" min="0" required value="10" />
+          </label>
+          <label>Mean droplet diameter [m]
+            <input type="number" name="droplet_diameter_mean_in" step="1e-7" min="0" required value="0.00005" />
+          </label>
+          <label>Maximum droplet diameter [m]
+            <input type="number" name="droplet_diameter_max_in" step="1e-7" min="0" required value="0.0001" />
+          </label>
+        </fieldset>
+
+        <fieldset>
+          <legend>Breakup Parameters</legend>
+          <label>Critical Weber number
+            <input type="number" name="critical_weber_number" step="0.1" min="0" required value="12" />
+          </label>
+          <label>Breakup factor — mean diameter
+            <input type="number" name="breakup_factor_mean" step="0.01" min="0" max="1" required value="0.5" />
+          </label>
+          <label>Breakup factor — maximum diameter
+            <input type="number" name="breakup_factor_max" step="0.01" min="0" max="1" required value="0.5" />
+          </label>
+        </fieldset>
+
+        <div class="form-actions">
+          <button type="button" id="btn-save-conditions">💾 Save conditions</button>
+          <span id="conditions-status" class="status-msg"></span>
+        </div>
+      </form>
+    </section>
+
+    <!-- ── Pre Tab 2: Grid Definition ──────────────────────────────────────── -->
+    <section id="tab-pre-grid" class="tab-content hidden">
+      <h3>Grid Definition</h3>
+      <form id="grid-form">
+        <fieldset>
+          <legend>Axial Domain</legend>
+          <label>x start [m]
+            <input type="number" name="x_start" step="0.001" value="0" required />
+          </label>
+          <label>x end [m]
+            <input type="number" name="x_end" step="0.001" value="0.1" required />
+          </label>
+          <label>Number of cells
+            <input type="number" name="n_cells" step="1" min="2" value="100" required />
+          </label>
+        </fieldset>
+
+        <fieldset>
+          <legend>Area Distribution A(x) — tabulated</legend>
+          <div id="area-table-error" class="error-msg hidden"></div>
+          <table id="area-table">
+            <thead><tr><th>x [m]</th><th>A [m²]</th><th></th></tr></thead>
+            <tbody id="area-table-body"></tbody>
+          </table>
+          <button type="button" id="btn-add-area-row">＋ Add row</button>
+        </fieldset>
+
+        <fieldset>
+          <legend>Area Profile Preview</legend>
+          <canvas id="area-preview-canvas" width="480" height="200"></canvas>
+        </fieldset>
+
+        <div class="form-actions">
+          <button type="button" id="btn-save-grid">💾 Save grid</button>
+          <span id="grid-status" class="status-msg"></span>
+        </div>
+      </form>
+    </section>
+
+    <!-- ── Solve Tab ────────────────────────────────────────────────────────── -->
+    <section id="tab-solve" class="tab-content hidden">
+      <h3>Solve</h3>
+      <div class="solve-panel">
+        <button id="btn-run" class="btn-run">▶ Run simulation</button>
+        <div id="solve-status" class="solve-status">Select a case and configure conditions first.</div>
+        <div id="solve-progress" class="hidden">
+          <div class="spinner"></div>
+          <span>Solver running…</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Post Tab 1: Graphs ───────────────────────────────────────────────── -->
+    <section id="tab-post-graphs" class="tab-content hidden">
+      <h3>Axial Profiles</h3>
+      <div id="plot-controls">
+        <strong>Select quantities:</strong>
+        <div id="plot-checkboxes" class="plot-checkboxes"></div>
+      </div>
+      <div id="plot-container" class="plot-container"></div>
+    </section>
+
+    <!-- ── Post Tab 2: Table ────────────────────────────────────────────────── -->
+    <section id="tab-post-table" class="tab-content hidden">
+      <h3>Results Table</h3>
+      <div class="table-actions">
+        <button id="btn-download-csv" disabled>⬇ Download CSV</button>
+      </div>
+      <div class="table-wrapper">
+        <table id="result-table">
+          <thead id="result-table-head"></thead>
+          <tbody id="result-table-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ── Settings Tab ─────────────────────────────────────────────────────── -->
+    <section id="tab-settings" class="tab-content hidden">
+      <h3>Display Units</h3>
+      <p>All solver inputs and internal computations remain in SI units. These settings affect display only.</p>
+      <form id="units-form">
+        <div id="unit-group-controls"></div>
+        <div class="form-actions">
+          <button type="button" id="btn-save-units">💾 Apply units</button>
+          <span id="units-status" class="status-msg"></span>
+        </div>
+      </form>
+    </section>
+
+  </main>
+</div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

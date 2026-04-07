@@ -4,7 +4,7 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from supersonic_atomizer.common import ConfigurationError, NumericalError
+from supersonic_atomizer.common import ConfigurationError
 from supersonic_atomizer.domain import BoundaryConditionConfig
 from supersonic_atomizer.solvers.gas import (
     GasBoundaryConditionState,
@@ -43,15 +43,16 @@ class TestRuntimeGasBoundaryConditions(unittest.TestCase):
         with self.assertRaises(ConfigurationError):
             initialize_gas_boundary_conditions(boundary_conditions, AirThermoProvider())
 
-    def test_rejects_outlet_conditions_outside_supported_subsonic_foundation(self) -> None:
+    def test_clamps_choked_outlet_conditions_to_sonic_boundary_state(self) -> None:
         boundary_conditions = BoundaryConditionConfig(
             Pt_in=500000.0,
             Tt_in=320.0,
             Ps_out=100000.0,
         )
 
-        with self.assertRaises(NumericalError):
-            initialize_gas_boundary_conditions(boundary_conditions, AirThermoProvider())
+        boundary_state = initialize_gas_boundary_conditions(boundary_conditions, AirThermoProvider())
+
+        self.assertEqual(boundary_state.outlet_mach_number, 1.0)
 
 
 if __name__ == "__main__":

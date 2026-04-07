@@ -1,0 +1,43 @@
+# Laval Nozzle Internal-Flow Validation Example
+#
+# This case is intended for the internal quasi-1D Laval-nozzle sweep utility.
+# The utility varies back pressure to generate textbook-style internal pressure
+# profiles up to the nozzle exit for the labels b, d, g, h, j, and k.
+
+case:
+  name: laval_nozzle_air
+  description: Air Laval-nozzle internal-flow validation case for back-pressure sweep.
+
+fluid:
+  working_fluid: air
+
+boundary_conditions:
+  Pt_in: 300000.0
+  Tt_in: 320.0
+  Ps_out: 240000.0
+
+geometry:
+  x_start: 0.0
+  x_end: 0.2
+  n_cells: 80
+  area_distribution:
+    type: table
+    x: [0.0, 0.05, 0.1, 0.15, 0.2]
+    A: [0.00018, 0.00013, 0.00010, 0.00012, 0.00014]
+
+droplet_injection:
+  droplet_velocity_in: 1.0
+  droplet_diameter_mean_in: 0.00010
+  droplet_diameter_max_in: 0.00020
+
+models:
+  breakup_model: weber_critical
+  critical_weber_number: 12.0
+  breakup_factor_mean: 0.5
+  breakup_factor_max: 0.75
+
+outputs:
+  output_directory: outputs/laval_nozzle_air
+  write_csv: true
+  write_json: true
+  generate_plots: true

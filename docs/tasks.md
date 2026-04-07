@@ -912,3 +912,101 @@ Phase 24 is done when the GUI has a configurable unit-settings page that applies
   - **Purpose:** Cover the unit conversion module, GUIState preference fields, page helpers, and the Post tab display helpers with unit preferences applied.
   - **Dependencies:** P24-T05, P24-T06.
   - **Completion criteria:** A focused test file covers all `gui/unit_settings.py` helpers, `GUIState` unit fields, `unit_settings_page.py` helpers, and `extract_plot_series` / `result_to_table_rows` with non-default unit preferences; all 117+ existing GUI tests continue to pass.
+
+---
+
+## Phase 25. FastAPI GUI Migration
+
+### Definition of Done
+
+Phase 25 is done when the FastAPI-based GUI can be launched from a separate script, provides the same case-management, condition-entry, simulation-run, result-display, and unit-setting capabilities as the Phase 23/24 Streamlit GUI, and all existing tests (152+) continue to pass alongside new FastAPI-specific tests.
+
+### Phase 25 Prerequisites
+
+- Phase 24 must be complete.
+- `app/services.py`, `domain/`, `solvers/`, `thermo/`, `io/`, `plotting/` must not be modified.
+- `gui/case_store.py`, `gui/service_bridge.py`, `gui/unit_settings.py`, `gui/state.py`, `gui/pages/*.py` must not be structurally changed (additive changes only).
+- The existing Streamlit entry point (`run20_gui.bat`) must continue to work.
+
+---
+
+- [x] **P25-T01 — Update SDD documents for FastAPI**
+  - **Purpose:** Add FastAPI technology selection (B.7.2) to architecture.md and Phase 25 to tasks.md before any implementation begins.
+  - **Dependencies:** P24-T07.
+  - **Completion criteria:** architecture.md B.7.2 and tasks.md Phase 25 are present with documented rationale, module additions, and boundary rules.
+
+- [x] **P25-T02 — Add FastAPI runtime dependencies**
+  - **Purpose:** Add `fastapi`, `uvicorn[standard]`, `jinja2`, `python-multipart` to `pyproject.toml`; add `httpx` to dev dependencies for TestClient.
+  - **Dependencies:** P25-T01.
+  - **Completion criteria:** Dependencies are present in `pyproject.toml` and `uv sync` completes successfully.
+
+- [x] **P25-T03 — Create core FastAPI modules**
+  - **Purpose:** Create the FastAPI app factory, Pydantic schemas, job store, session store, plot utilities, and dependency-injection helpers.
+  - **Dependencies:** P25-T02.
+  - **Completion criteria:** `gui/fastapi_app.py`, `gui/schemas.py`, `gui/job_store.py`, `gui/session_store.py`, `gui/plot_utils.py`, and `gui/dependencies.py` exist and import cleanly.
+
+- [x] **P25-T04 — Create REST API routers**
+  - **Purpose:** Provide case CRUD, simulation run/status/result, and unit preference REST endpoints behind the service bridge boundary.
+  - **Dependencies:** P25-T03.
+  - **Completion criteria:** All five router modules exist; the FastAPI app mounts them; each endpoint returns the documented JSON shape.
+
+- [x] **P25-T05 — Create HTML template and static assets**
+  - **Purpose:** Provide a browser-based single-page interface served by FastAPI/Jinja2 with vanilla JavaScript for dynamic behavior.
+  - **Dependencies:** P25-T04.
+  - **Completion criteria:** `gui/templates/index.html`, `gui/static/app.css`, and `gui/static/app.js` exist; the page renders correctly in a browser; all tabs are navigable and the Run flow works end-to-end.
+
+- [x] **P25-T06 — Create launcher scripts**
+  - **Purpose:** Provide `run21_fastapi_gui.bat` and `run21_fastapi_gui.sh` consistent with existing script conventions.
+  - **Dependencies:** P25-T05.
+  - **Completion criteria:** Launcher scripts exist and are documented in README.md; the existing `run20_gui.bat` (Streamlit) is unaffected.
+
+- [x] **P25-T07 — Add FastAPI tests and verify all tests pass**
+  - **Purpose:** Protect the FastAPI API boundary and confirm no regressions in the existing 152 tests.
+  - **Dependencies:** P25-T06.
+  - **Completion criteria:** `tests/test_runtime_gui_fastapi.py` covers app creation, case CRUD, simulation status/result, and unit endpoints; all 152+ existing tests plus new FastAPI tests pass.
+
+---
+
+## Phase 26. Laval Nozzle Internal Shock Extension
+
+### Definition of Done
+
+Phase 26 is done when the quasi-1D gas solver can solve supported converging-diverging Laval-nozzle internal flows across subsonic, choked/supersonic, and one internal normal-shock regime, and when a back-pressure sweep produces validation plots showing textbook-like $x$ vs $p/p_0$ internal trends up to the nozzle exit.
+
+### Phase 26 Prerequisites
+
+- Phase 22 must be complete.
+- Phase 25 may remain available unchanged.
+- External downstream jet structure, oblique shocks, and expansion fans remain out of scope.
+
+---
+
+- [ ] **P26-T01 — Update SDD documents for Laval-nozzle shock support**
+  - **Purpose:** Record the new supported quasi-1D internal-flow scope before runtime implementation begins.
+  - **Dependencies:** P25-T07.
+  - **Completion criteria:** spec.md, architecture.md, and tasks.md document choking-aware branch selection, one internal normal-shock capability, and the validation scope limited to nozzle-internal flow.
+
+- [ ] **P26-T02 — Implement gas-state helper support for supersonic and normal-shock relations**
+  - **Purpose:** Add the quasi-1D helper formulas needed for supersonic area-Mach inversion and normal-shock state jumps.
+  - **Dependencies:** P26-T01.
+  - **Completion criteria:** Runtime helper functions exist for supersonic branch inversion, normal-shock downstream Mach/pressure relations, and post-shock total-pressure recovery; focused tests cover representative values and invariants.
+
+- [ ] **P26-T03 — Extend the quasi-1D gas solver for Laval-nozzle branch selection**
+  - **Purpose:** Add runtime selection among subsonic, fully supersonic, and one internal-normal-shock branches for supported converging-diverging geometries.
+  - **Dependencies:** P26-T02.
+  - **Completion criteria:** The gas solver automatically selects the supported internal branch from geometry and back pressure, returns structured diagnostics for the chosen regime, and rejects unsupported geometries explicitly.
+
+- [ ] **P26-T04 — Add runtime regression tests for Laval-nozzle internal-flow regimes**
+  - **Purpose:** Protect the new branch-selection behavior and shock-location logic against regressions.
+  - **Dependencies:** P26-T03.
+  - **Completion criteria:** Runtime tests cover subsonic, internal-shock, near-exit-shock, and fully supersonic internal solutions with qualitative Mach/pressure trend assertions.
+
+- [ ] **P26-T05 — Add Laval-nozzle validation examples and sweep utility**
+  - **Purpose:** Provide a reproducible internal-flow test case and a utility that varies back pressure across textbook Laval-nozzle regimes.
+  - **Dependencies:** P26-T04.
+  - **Completion criteria:** A reusable Laval-nozzle case definition and a back-pressure sweep utility exist, producing labeled profiles for `b`, `d`, `g`, `h`, `j`, and `k` (with `j` and `k` sharing the same internal solution family).
+
+- [ ] **P26-T06 — Execute the back-pressure validation sweep and review qualitative agreement**
+  - **Purpose:** Confirm that the new internal-flow solver reproduces textbook-like $x$ vs $p/p_0$ trends up to the nozzle exit.
+  - **Dependencies:** P26-T05.
+  - **Completion criteria:** The sweep runs successfully, plot artifacts are generated, and the resulting qualitative agreement or limitations are recorded in run notes or validation output.

@@ -8,11 +8,16 @@ from supersonic_atomizer.common import NumericalError
 from supersonic_atomizer.domain import BoundaryConditionConfig, GasState
 from supersonic_atomizer.solvers.gas import (
     assemble_gas_state,
+    assemble_gas_state_from_total_conditions,
     compute_area_mach_relation,
+    compute_normal_shock_downstream_mach,
+    compute_post_shock_total_pressure,
     compute_static_pressure,
     compute_static_temperature,
+    compute_total_pressure,
     initialize_gas_boundary_conditions,
     solve_subsonic_mach_from_area_ratio,
+    solve_supersonic_mach_from_area_ratio,
 )
 from supersonic_atomizer.thermo import AirThermoProvider
 
@@ -80,6 +85,40 @@ class TestRuntimeGasStateUpdates(unittest.TestCase):
                 boundary_state=boundary_state,
                 thermo_provider=AirThermoProvider(),
             )
+
+    def test_area_mach_relation_and_supersonic_inverse_are_consistent(self) -> None:
+        area_ratio = compute_area_mach_relation(2.0, 1.4)
+        recovered_mach_number = solve_supersonic_mach_from_area_ratio(area_ratio, 1.4)
+
+        self.assertGreater(area_ratio, 1.0)
+        self.assertAlmostEqual(recovered_mach_number, 2.0, places=8)
+
+    def test_compute_total_pressure_recovers_stagnation_pressure(self) -> None:
+        static_pressure = compute_static_pressure(200000.0, 0.8, 1.4)
+        recovered_total_pressure = compute_total_pressure(static_pressure, 0.8, 1.4)
+
+        self.assertAlmostEqual(recovered_total_pressure, 200000.0, places=6)
+
+    def test_normal_shock_relations_reduce_mach_and_total_pressure(self) -> None:
+        downstream_mach = compute_normal_shock_downstream_mach(2.0, 1.4)
+        downstream_total_pressure = compute_post_shock_total_pressure(250000.0, 2.0, 1.4)
+
+        self.assertLess(downstream_mach, 1.0)
+        self.assertGreater(downstream_mach, 0.0)
+        self.assertLess(downstream_total_pressure, 250000.0)
+
+    def test_assembles_supersonic_state_from_total_conditions(self) -> None:
+        gas_state = assemble_gas_state_from_total_conditions(
+            x_value=0.1,
+            area_value=1.5e-4,
+            mach_number=1.8,
+            total_pressure=250000.0,
+            total_temperature=350.0,
+            thermo_provider=AirThermoProvider(),
+        )
+
+        self.assertGreater(gas_state.mach_number, 1.0)
+        self.assertGreater(gas_state.velocity, gas_state.thermo_state.sound_speed)
 
 
 if __name__ == "__main__":

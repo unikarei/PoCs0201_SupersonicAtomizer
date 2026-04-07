@@ -7,9 +7,10 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from supersonic_atomizer.app import SimulationRunResult, StartupResult
+from supersonic_atomizer.app import LavalSweepResult, SimulationRunResult, StartupResult
 from supersonic_atomizer.cli import (
     CLIOptions,
+    format_laval_sweep_report,
     format_run_report,
     format_startup_report,
     main,
@@ -43,12 +44,19 @@ class TestCLIFullRunArgParsing(unittest.TestCase):
     def test_default_mode_is_full_run(self) -> None:
         options = parse_cli_args(["case.yaml"])
         self.assertIsInstance(options, CLIOptions)
+        self.assertEqual(options.command, "simulate")
         self.assertEqual(options.case_path, "case.yaml")
         self.assertFalse(options.startup_only)
 
     def test_startup_only_flag_preserved(self) -> None:
         options = parse_cli_args(["case.yaml", "--startup-only"])
         self.assertTrue(options.startup_only)
+
+    def test_laval_sweep_mode_is_preserved(self) -> None:
+        options = parse_cli_args(["laval-sweep", "examples/laval_nozzle_air.yaml"])
+
+        self.assertEqual(options.command, "laval-sweep")
+        self.assertEqual(options.case_path, "examples/laval_nozzle_air.yaml")
 
 
 class TestCLIMainFullRun(unittest.TestCase):
@@ -69,6 +77,29 @@ class TestCLIMainFullRun(unittest.TestCase):
         self.assertIsInstance(result, StartupResult)
         self.assertEqual(service.received_case_path, "startup-case.yaml")
         self.assertEqual(result.status, "ready")
+
+    def test_main_laval_sweep_invokes_runner(self) -> None:
+        def _stub_sweep_runner(case_path: str, *, output_directory: str | None = None) -> LavalSweepResult:
+            self.assertEqual(case_path, "examples/laval_nozzle_air.yaml")
+            self.assertEqual(output_directory, "outputs/custom")
+            return LavalSweepResult(
+                case_path=case_path,
+                plot_path="plot.png",
+                summary_path="summary.json",
+                report_path="report.md",
+                curves=(),
+                validation_status="pass",
+                validation_observations=("ok",),
+                notes=(),
+            )
+
+        result = main(
+            ["laval-sweep", "examples/laval_nozzle_air.yaml", "--output-directory", "outputs/custom"],
+            application_service=_StubApplicationService(),
+            laval_sweep_runner=_stub_sweep_runner,
+        )
+
+        self.assertIsInstance(result, LavalSweepResult)
 
 
 class TestFormatRunReport(unittest.TestCase):
@@ -100,6 +131,21 @@ class TestFormatRunReport(unittest.TestCase):
         report = format_run_report(result)
         self.assertIn("output failed", report)
         self.assertIn("disk full", report)
+
+    def test_laval_sweep_report(self) -> None:
+        result = LavalSweepResult(
+            case_path="examples/laval_nozzle_air.yaml",
+            plot_path="plot.png",
+            summary_path="summary.json",
+            report_path="report.md",
+            curves=(),
+            validation_status="pass",
+            validation_observations=("ok",),
+            notes=(),
+        )
+        report = format_laval_sweep_report(result)
+        self.assertIn("Laval sweep completed", report)
+        self.assertIn("report.md", report)
 
 
 class TestRunCliFullRun(unittest.TestCase):
