@@ -17,10 +17,12 @@ PLOT_FIELDS: dict[str, tuple[str, str, str]] = {
     "temperature":            ("Temperature",            "temperature", "K"),
     "working_fluid_velocity": ("Working-fluid velocity", "velocity",   "m/s"),
     "droplet_velocity":       ("Droplet velocity",       "velocity",   "m/s"),
+    "slip_velocity":          ("Slip velocity",          "velocity",   "m/s"),
     "Mach_number":            ("Mach number",            None,         "-"),
     "droplet_mean_diameter":  ("Droplet mean diameter",  "diameter",   "m"),
     "droplet_maximum_diameter": ("Droplet maximum diameter", "diameter", "m"),
     "Weber_number":           ("Weber number",           None,         "-"),
+    "pressure_over_total":    ("Pressure / inlet total pressure", None,   "-"),
 }
 
 
@@ -66,11 +68,46 @@ def extract_plot_series(
         "temperature":            _entry(simulation_result.gas_solution.temperature_values,                       "temperature", "Temperature"),
         "working_fluid_velocity": _entry(simulation_result.gas_solution.velocity_values,                          "velocity",    "Working-fluid velocity"),
         "droplet_velocity":       _entry(simulation_result.droplet_solution.velocity_values,                      "velocity",    "Droplet velocity"),
+        "slip_velocity":          _entry(simulation_result.droplet_solution.slip_velocity_values,                 "velocity",    "Slip velocity"),
         "Mach_number":            _entry(simulation_result.gas_solution.mach_number_values,                       None,          "Mach number"),
         "droplet_mean_diameter":  _entry(simulation_result.droplet_solution.mean_diameter_values,                 "diameter",    "Droplet mean diameter"),
         "droplet_maximum_diameter": _entry(simulation_result.droplet_solution.maximum_diameter_values,            "diameter",    "Droplet maximum diameter"),
         "Weber_number":           _entry(simulation_result.droplet_solution.weber_number_values,                  None,          "Weber number"),
+        "pressure_over_total":    _entry(
+            [p / float(simulation_result.settings_summary.get("boundary_conditions", {}).get("Pt_in", float(p)))
+             for p in simulation_result.gas_solution.pressure_values],
+            None,
+            "Pressure / Inlet total pressure",
+        ),
     }
+
+
+def extract_overlay_plot_series(
+    labeled_results: list[tuple[str, SimulationResult]] | tuple[tuple[str, SimulationResult], ...],
+    unit_preferences: dict[str, str] | None = None,
+) -> dict[str, dict[str, Any]]:
+    """Extract per-field overlay data for multiple simulation results."""
+    overlay: dict[str, dict[str, Any]] = {}
+    for run_label, simulation_result in labeled_results:
+        per_run_series = extract_plot_series(simulation_result, unit_preferences)
+        for field, data in per_run_series.items():
+            field_overlay = overlay.setdefault(
+                field,
+                {
+                    "title": data["title"],
+                    "x_label": data["x_label"],
+                    "ylabel": data["ylabel"],
+                    "series": [],
+                },
+            )
+            field_overlay["series"].append(
+                {
+                    "label": run_label,
+                    "x": data["x"],
+                    "y": data["y"],
+                }
+            )
+    return overlay
 
 
 def render_post_graphs() -> None:

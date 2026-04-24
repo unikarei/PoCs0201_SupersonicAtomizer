@@ -16,6 +16,16 @@ The first release shall prioritize numerical robustness, modularity, traceabilit
 
 ---
 
+## 1.1 Release Structure
+
+This documentation set separates the project into three layers of scope:
+
+- Core MVP: CLI-driven YAML input, quasi-1D solver execution, CSV/JSON export, and Matplotlib plotting.
+- GUI extension: a later browser-based application layer built on the existing application-service boundary.
+- Later advanced study features: non-MVP additions such as richer validation tooling or broader comparison workflows, only if separately approved.
+
+The Core MVP remains CLI-focused and does not depend on a GUI.
+
 ## 2. Scope
 
 ### 2.1 In Scope for MVP
@@ -233,6 +243,7 @@ The simulator shall provide the following as functions of $x$:
 - `Mach_number`
 - `droplet_velocity`
 - `slip_velocity`
+- `surface_tension`
 - `droplet_mean_diameter`
 - `droplet_maximum_diameter`
 - `Weber_number`
@@ -260,6 +271,8 @@ At minimum, the simulator shall plot versus $x$:
 - temperature
 - working fluid velocity
 - droplet velocity
+- slip velocity
+- surface tension
 - Mach number
 - droplet mean diameter
 - droplet maximum diameter
@@ -454,7 +467,8 @@ Unless later changed during architecture and task planning, the following assump
 
 ---
 
-## 15. Acceptance Criteria
+
+### 15. Acceptance Criteria
 
 The specification will be considered satisfied for MVP planning when the future implementation can demonstrate all of the following:
 
@@ -469,6 +483,49 @@ The specification will be considered satisfied for MVP planning when the future 
 - [x] The simulator exports results to CSV and JSON.
 - [x] The simulator generates plots of major variables versus $x$.
 - [x] The simulator runs from a CLI in Python.
+
+---
+
+## Appendix C. Laval Nozzle Back-Pressure Sweep and Validation (Phase 26)
+
+### C.1 Purpose
+
+To support robust validation of the quasi-1D solver for converging-diverging Laval nozzles, the simulator shall provide:
+
+- A CLI-accessible command to run a back-pressure sweep utility, generating a family of internal-flow solutions for a fixed nozzle geometry and varying outlet static pressure.
+- Automated generation of $p/p_0$ (static-to-total pressure) validation plots and summary reports for the sweep outputs, suitable for comparison to textbook trends.
+
+### C.2 CLI Sweep Command Requirements
+
+- The CLI shall provide a command (e.g., `supersonic-atomizer sweep --case <yaml> --out <dir> [--back-pressures ...]`) to run a sweep over a user-specified set or range of outlet static pressures for a given Laval nozzle case definition.
+- The sweep utility shall:
+   - Accept a YAML case file as the base geometry and inlet condition definition.
+   - Accept a list or range of outlet static pressures to sweep.
+   - For each back pressure, run the simulation and collect results.
+   - Write all results to a sweep output directory, with clear labeling of each run.
+   - Aggregate results for post-processing and validation.
+
+### C.3 Automated Validation Report Requirements
+
+- After running the sweep, the utility shall:
+   - Generate a summary CSV and JSON of all runs, including key fields (e.g., $x$, $p$, $p/p_0$, Mach number, shock location if present).
+   - Produce a validation plot of $x$ vs $p/p_0$ for all sweep cases, with regime labels (subsonic, supersonic, shock-internal, etc.).
+   - Optionally generate a report (Markdown or HTML) summarizing the sweep, validation trends, and any detected anomalies.
+
+### C.4 Constraints and Scope
+
+- The sweep and validation report features must not break the existing single-case CLI or GUI workflows.
+- All outputs must be SI-unit-consistent and reproducible.
+- The sweep utility must use only documented and supported solver/model interfaces.
+- The validation logic must be modular and testable.
+
+### C.5 Acceptance Criteria
+
+- [x] A user can invoke the sweep utility from the CLI with a YAML case and a set/range of back pressures.
+- [x] The utility generates labeled output directories/files for each run.
+- [x] The utility produces a combined $x$ vs $p/p_0$ plot and summary CSV/JSON for all sweep cases.
+- [x] The utility generates a validation report summarizing regime coverage and qualitative agreement with expected trends.
+- [x] All outputs are compatible with downstream analysis and regression testing.
 
 ### 15.2 Engineering Acceptance Criteria
 
@@ -535,8 +592,8 @@ The GUI extension provides a browser-based interactive interface for the simulat
 │  ○ case_001     │  └───────────────────────────────────────────┘   │
 │  ○ case_002     │                                                   │
 │  ● case_003     │  ┌─[ Solve ]─────────────────────────────────┐   │
-│                  │  │  Run / Max iterations / Convergence /     │   │
-│  [+ New Case]    │  │  Convergence history                      │   │
+│                  │  │  Run / Status / Completion / Diagnostics  │   │
+│  [+ New Case]    │  │  Polling / Result Ready                    │   │
 │  [Open Case]     │  └───────────────────────────────────────────┘   │
 │                  │                                                   │
 │                  │  ┌─[ Post ]──────────────────────────────────┐   │
@@ -552,7 +609,7 @@ The GUI extension provides a browser-based interactive interface for the simulat
 - [ ] The user shall be able to create a new case with a unique name.
 - [ ] The user shall be able to open (load) an existing case and restore its conditions.
 - [ ] The currently active case shall be visually highlighted.
-- [ ] Case state shall persist across sessions using a case-store backend.
+- [ ] Case state shall persist across sessions using a local YAML-backed case store.
 
 ### B.4 Pre Tab 1 — Analysis Conditions
 
@@ -565,6 +622,8 @@ The user shall be able to set all required simulation inputs through form contro
 - [ ] Droplet injection conditions: initial velocity, mean diameter, maximum diameter.
 - [ ] Breakup model parameters: critical Weber number, breakup factor mean, breakup factor max.
 - [ ] Optional: inlet wetness (steam cases only).
+- [ ] Numeric condition fields shall accept either a single SI value or multiple SI values entered as comma-, space-, semicolon-, or newline-separated tokens.
+- [ ] Multi-value numeric entries in the Conditions UI shall define a GUI-side parameter sweep for Solve-tab execution and shall not require separate case files.
 - [ ] Input validation shall be performed before the Solve tab becomes active.
 - [ ] All fields shall display SI unit labels.
 
@@ -577,7 +636,7 @@ The user shall be able to set all required simulation inputs through form contro
 
 ### B.6 Solve Tab — Solver Execution
 
-> **MVP note:** The quasi-1D solver uses a spatial marching method, not an iterative convergence loop. Maximum iteration count and convergence criterion controls are therefore not applicable in the MVP GUI. Run status and solver progress are reported through status messages and run completion indicators instead.
+> **MVP note:** The quasi-1D solver uses a spatial marching method, not an iterative convergence loop. The MVP GUI therefore exposes run control, status, completion outcome, diagnostics, and user-readable errors rather than iteration-based convergence controls.
 
 - [ ] The GUI shall provide a **Run** button that invokes the simulation engine.
 - [ ] The GUI shall display solver progress or status during execution.
@@ -585,21 +644,28 @@ The user shall be able to set all required simulation inputs through form contro
 - [ ] The GUI shall report solver completion status: success, validation outcome, and output location.
 - [ ] The GUI shall report solver errors in a user-readable format.
 - [ ] The Run button shall be disabled while a simulation is in progress.
+- [ ] When one or more numeric condition fields contain multiple values, the Solve tab shall expand those values into a parameter sweep over the Cartesian product of the entered value lists.
+- [ ] The Solve tab shall validate multi-value numeric tokens before the run starts and shall reject malformed tokens or excessive sweep sizes with a user-readable error.
+- [ ] Each expanded run shall use an immutable copy-on-run payload so later UI edits do not affect in-flight runs.
+- [ ] Solve status shall summarize the number of expanded runs executed for the current sweep.
 
 ### B.7 Post Tab 1 — Graphs
 
 - [ ] The GUI shall display axial profile plots for all required MVP output quantities:
   - pressure, temperature, working fluid velocity, droplet velocity,
-  - Mach number, droplet mean diameter, droplet maximum diameter, Weber number.
+   - slip velocity, surface tension,
+   - Mach number, droplet mean diameter, droplet maximum diameter, Weber number.
 - [ ] The user shall be able to select which quantities to display.
 - [ ] The plots shall update automatically after each completed run.
 - [ ] The user shall be able to export displayed plots as PNG files.
+- [ ] When Solve executes multiple expanded runs, the Graphs tab shall overlay those runs on the same axes with a legend derived from the varied parameter values.
 
 ### B.8 Post Tab 2 — Results Table
 
 - [ ] The GUI shall display a tabular view of all axial result fields.
 - [ ] The table shall be scrollable and show all $x$ positions.
 - [ ] The user shall be able to export the results table as CSV.
+- [ ] When Solve executes multiple expanded runs, the results table shall aggregate all runs and include a run-label column identifying the varied parameter combination for each row.
 
 ### B.9 GUI Constraints
 
@@ -607,16 +673,21 @@ The user shall be able to set all required simulation inputs through form contro
 - The GUI must invoke the existing application service boundary unchanged.
 - All computation remains in the existing Python solver engine.
 - The GUI layer must be replaceable without touching solver code.
-- The GUI must remain consistent with the existing YAML-based case representation internally.
+- The GUI must remain consistent with the local YAML-backed case store representation internally.
+- When a run starts, the GUI snapshots the current case state into an immutable run payload; later case edits do not affect the running job.
 - Technology selection is deferred to architecture planning.
+- Multi-value parsing and parameter-sweep expansion must remain in the GUI/application orchestration layer; the solver engine itself must continue to receive one single-case payload per run.
+- Multi-value text entered in the Conditions UI must remain session-local until Solve expands it; the case store must continue to persist solver-compatible single-case YAML.
 
 ### B.10 GUI Out of Scope
 
 - 3D visualization
-- Multi-case comparison view (may be added later)
+- Multi-case comparison view (out of scope for the MVP GUI; may be considered later)
 - Live/streaming solver output during execution
 - User authentication or multi-user support
 - Mobile layout
+
+> Same-case parameter sweeps initiated from multi-value numeric entries in the Conditions UI are in scope. A dedicated general-purpose multi-case comparison workspace remains out of scope.
 
 ### B.11 Unit Settings
 

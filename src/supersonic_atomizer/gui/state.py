@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from supersonic_atomizer.app.services import SimulationRunResult
+from supersonic_atomizer.gui.multi_run import MultiRunSimulationResult
 
 
 @dataclass
@@ -76,7 +77,7 @@ class GUIState:
 
     # ── Solver execution state ─────────────────────────────────────────────────
     solver_running: bool = False
-    last_run_result: SimulationRunResult | None = None
+    last_run_result: SimulationRunResult | MultiRunSimulationResult | None = None
     solver_error: str | None = None
 
     # ── Transitions ────────────────────────────────────────────────────────────
@@ -87,7 +88,7 @@ class GUIState:
         self.last_run_result = None
         self.solver_error = None
 
-    def mark_complete(self, result: SimulationRunResult) -> None:
+    def mark_complete(self, result: SimulationRunResult | MultiRunSimulationResult) -> None:
         """Transition to idle state after the solver returns a result."""
         self.solver_running = False
         self.last_run_result = result
@@ -105,6 +106,7 @@ class GUIState:
         """Return True when the last run completed without a failure status."""
         return (
             self.last_run_result is not None
+            and isinstance(self.last_run_result, SimulationRunResult)
             and self.last_run_result.status in {"completed", "output-failed"}
         )
 

@@ -1,34 +1,34 @@
 fluid:
   working_fluid: air
 boundary_conditions:
-  Pt_in: 200000.0
-  Tt_in: 400.0
-  Ps_out: 160000.0
+  Pt_in: 300000
+  Tt_in: 320
+  Ps_out: 24000
 droplet_injection:
-  droplet_velocity_in: 10.0
+  droplet_velocity_in: 10
   droplet_diameter_mean_in: 5.0e-05
   droplet_diameter_max_in: 0.0001
 models:
   breakup_model: weber_critical
-  critical_weber_number: 12.0
+  critical_weber_number: 12
   breakup_factor_mean: 0.5
   breakup_factor_max: 0.5
 geometry:
-  x_start: 0.0
+  x_start: 0
   x_end: 0.3
   n_cells: 100
   area_distribution:
     type: table
     x:
-    - 0.0
+    - 0
     - 0.05
     - 0.15
     - 0.3
     A:
+    - 0.00013398
     - 0.0001
-    - 0.0001
-    - 7.0e-05
-    - 6.0e-05
+    - 0.00016735
+    - 0.00016735
 outputs:
   output_directory: outputs/TEST001
   write_csv: true

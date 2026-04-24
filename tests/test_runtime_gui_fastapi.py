@@ -307,6 +307,10 @@ class TestIndexEndpoint:
         assert "text/html" in resp.headers["content-type"]
         assert b"Supersonic Atomizer" in resp.content
 
+    def test_get_favicon_returns_no_content(self, client):
+        resp = client.get("/favicon.ico")
+        assert resp.status_code == 204
+
 
 class TestCasesEndpoints:
 

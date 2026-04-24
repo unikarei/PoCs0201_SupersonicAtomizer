@@ -87,6 +87,18 @@ def generate_csv_content(rows: list[dict[str, object]]) -> str:
     return buffer.getvalue()
 
 
+def aggregate_result_to_table_rows(
+    labeled_results: list[tuple[str, SimulationResult]] | tuple[tuple[str, SimulationResult], ...],
+    unit_preferences: dict[str, str] | None = None,
+) -> list[dict[str, object]]:
+    """Aggregate multiple SimulationResult objects into one run-labeled table."""
+    rows: list[dict[str, object]] = []
+    for run_label, simulation_result in labeled_results:
+        for row in result_to_table_rows(simulation_result, unit_preferences):
+            rows.append({"run_label": run_label, **row})
+    return rows
+
+
 def render_post_table() -> None:
     """Render the Post Tab 2 results table with user-selected display units."""
     import pandas as pd

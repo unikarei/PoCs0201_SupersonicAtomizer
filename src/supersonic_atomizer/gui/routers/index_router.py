@@ -25,3 +25,10 @@ async def index(request: Request, response: Response) -> HTMLResponse:
     # Ensure a session cookie exists before the page loads.
     get_or_create_session_id(response)
     return _templates.TemplateResponse(request=request, name="index.html")
+
+
+@router.get("/favicon.ico", status_code=204)
+async def favicon() -> Response:
+    """Return an empty favicon response to avoid harmless 404 noise."""
+
+    return Response(status_code=204)

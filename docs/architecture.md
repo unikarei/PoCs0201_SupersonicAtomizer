@@ -806,9 +806,10 @@ The GUI package shall be organized under `src/supersonic_atomizer/gui/`.
 | `gui/panels/case_panel.py` | Left panel: case list, new case, open case |
 | `gui/pages/pre_conditions.py` | Pre Tab 1: analysis condition form controls |
 | `gui/pages/pre_grid.py` | Pre Tab 2: grid definition table and area preview |
-| `gui/pages/solve.py` | Solve tab: run button, convergence settings, status, history plot |
+| `gui/pages/solve.py` | Solve tab: run button, status, completion outcome, diagnostics |
 | `gui/pages/post_graphs.py` | Post Tab 1: axial profile plots |
 | `gui/pages/post_table.py` | Post Tab 2: results table and CSV export |
+| `gui/multi_run.py` | GUI-side numeric-token parsing, sweep expansion, run labeling, and immutable run-snapshot helpers |
 | `gui/case_store.py` | Case persistence: save/load case state across sessions |
 | `gui/service_bridge.py` | Thin adapter between GUI events and the application service |
 | `gui/state.py` | GUI-side reactive or session state model |
@@ -820,28 +821,33 @@ The GUI package shall be organized under `src/supersonic_atomizer/gui/`.
 - `gui/service_bridge.py` is the only permitted call site into the application service from the GUI.
 - `gui/case_store.py` owns all case-persistence logic; no other GUI module reads/writes case files directly.
 - Solver execution must remain non-blocking from the GUI perspective; a background thread or async pattern must be used.
+- When a run starts, the GUI must snapshot the current case state into an immutable run payload; later case edits must not affect the running job.
 - The GUI must handle `ApplicationService` errors and surface them as user-readable messages without exposing internal tracebacks.
+- Multi-value numeric token parsing and sweep expansion belong to the GUI/application orchestration boundary only; they must not modify solver internals or case-store persistence rules.
+- Overlay plotting must consume structured per-run `SimulationResult` objects only and must not recompute solver physics.
 
 ### B.4 GUI Data Flow
 
 ```
 User action
   → GUI state update (gui/state.py)
-  → gui/service_bridge.py calls ApplicationService
-  → ApplicationService returns SimulationRunResult
-  → gui/state.py stores result
+  → gui/multi_run.py parses multi-value numeric tokens and expands immutable run payloads
+  → gui/service_bridge.py calls ApplicationService once per expanded payload
+  → ApplicationService returns one `SimulationRunResult` per expanded payload
+  → GUI layer stores the per-run results and assembles overlay/table view models
   → GUI pages re-render from state
-    → post_graphs.py reads result axial arrays → plots
-    → post_table.py reads result axial arrays → table
+    → post_graphs.py reads per-run result axial arrays → overlay plots
+    → post_table.py reads per-run result axial arrays → aggregated table
     → solve.py reads diagnostics → status display
 ```
 
 ### B.5 Case Store Design
 
-- Cases are stored as YAML files in a configurable local case directory (default: `cases/`).
+- Cases are stored in a local YAML-backed case store (default directory: `cases/`).
 - `case_store.py` provides create, list, load, and save operations.
 - Each case YAML file is structurally identical to the existing input format consumed by `config/loader.py`.
 - The GUI never constructs YAML manually; it translates form state into the internal case model, which is then serialized by `case_store.py`.
+- Multi-value numeric Conditions entries are not persisted as multi-valued YAML scalars; when users want to save a case, the persisted case remains a single solver-compatible case definition.
 
 ### B.6 Directory Structure Addition
 
@@ -872,7 +878,9 @@ cases/               ← default case-store directory
 - Technology selection is finalized during Phase 23 planning before implementation begins.
 - Candidates include Streamlit, Panel, Dash, and Tkinter; the choice must be documented in the task plan before any GUI code is written.
 
-### B.7.1 Selected Technology: Streamlit (decided — P23-T01)
+FastAPI is the current primary GUI architecture. Streamlit is retained as a legacy-compatible prototype/front-end path for compatibility and earlier GUI history.
+
+### B.7.1 Selected Technology: Streamlit (legacy-compatible prototype — P23-T01)
 
 **Selected framework:** Streamlit
 
@@ -900,9 +908,9 @@ cases/               ← default case-store directory
 **Non-blocking design resolution (risk B.8):**
 The solver is invoked in a background `threading.Thread`. Completion status and results are stored in `st.session_state`. The UI polls state on rerun. The Run button is disabled by a session-state flag while the thread is alive.
 
-> **Note (Phase 25):** Streamlit was the Phase 23 implementation. Phase 25 replaces the Streamlit front-end with FastAPI. See B.7.2 for the updated technology selection.
+> **Note (Phase 25):** Streamlit was the original Phase 23 prototype. It remains a legacy-compatible front-end path, but FastAPI is the current primary GUI architecture. See B.7.2 for the current architecture selection.
 
-### B.7.2 Selected Technology: FastAPI (decided — P25-T01)
+### B.7.2 Selected Technology: FastAPI (current primary GUI architecture — P25-T01)
 
 **Selected framework:** FastAPI + uvicorn + Jinja2 templates
 
@@ -921,9 +929,9 @@ The solver is invoked in a background `threading.Thread`. Completion status and 
 | Non-blocking solver | `threading.Thread` started by `/api/simulation/run`; client polls `/api/simulation/status/{job_id}`. |
 | REST API separation | Clean JSON API boundary keeps front-end logic separate from solver logic. |
 
-**Rejected alternatives (Phase 25):**
+**Rejected alternatives / retained paths (Phase 25):**
 
-- **Streamlit (Phase 23):** Suitable for rapid PoC; retained and not removed. Phase 25 adds FastAPI as an alternative entry point.
+- **Streamlit (Phase 23):** Suitable for rapid PoC; retained as a legacy-compatible front-end path, not the primary architecture.
 - **Dash:** Uses a JavaScript/React front-end internally; adds complexity without benefit over FastAPI for this use case.
 - **Panel:** More flexible but more complex API; no benefit over FastAPI REST for this use case.
 
@@ -936,6 +944,7 @@ The solver is invoked in a background `threading.Thread`. Completion status and 
 | `gui/job_store.py` | In-memory simulation job store (thread-safe) |
 | `gui/session_store.py` | In-memory server-side session store keyed by cookie |
 | `gui/plot_utils.py` | Matplotlib figure → base64 PNG conversion helpers |
+| `gui/multi_run.py` | Multi-value numeric parsing, sweep expansion, run-label generation, and temporary run-snapshot helpers |
 | `gui/dependencies.py` | FastAPI `Depends` helpers for session resolution |
 | `gui/routers/index_router.py` | `GET /` → main HTML page |
 | `gui/routers/cases_router.py` | Case CRUD REST endpoints |
@@ -945,21 +954,27 @@ The solver is invoked in a background `threading.Thread`. Completion status and 
 | `gui/static/app.css` | Application stylesheet |
 | `gui/static/app.js` | Vanilla JavaScript client logic |
 
-**Reused unchanged (Phase 25):**
+**Reused with additive extensions (Phase 27):**
 `gui/case_store.py`, `gui/service_bridge.py`, `gui/unit_settings.py`, `gui/state.py`,
 `gui/pages/post_graphs.py` (`extract_plot_series`), `gui/pages/post_table.py` (`result_to_table_rows`, `generate_csv_content`),
 `gui/pages/pre_conditions.py`, `gui/pages/pre_grid.py`, `gui/pages/solve.py`, `gui/panels/case_panel.py`.
 
 **Non-blocking design resolution (Phase 25):**
-The solver is invoked in a `threading.Thread` started by `/api/simulation/run`. The job result is stored in
-`JobStore` keyed by `job_id`. The browser polls `/api/simulation/status/{job_id}` every 800 ms until the
+The solver is invoked in a `threading.Thread` started by `/api/simulation/run`. For multi-value Conditions input,
+the thread sequentially executes one application-service run per expanded immutable payload. The aggregated job result
+is stored in `JobStore` keyed by `job_id`. The browser polls `/api/simulation/status/{job_id}` every 800 ms until the
 status changes to `completed` or `failed`, then fetches `/api/simulation/result/{job_id}`.
+
+Run execution uses copy-on-run semantics: the submitted job receives an immutable snapshot of the case state, and later edits in the case store do not change an in-flight run.
+
+To preserve case-store compatibility and avoid output-directory collisions, GUI-initiated expanded runs may disable production artifact writing in the submitted run snapshots and rely on structured `SimulationResult` objects plus GUI-side figure/table assembly for browser display.
 
 ### B.8 GUI Technical Risks
 
 - **Blocking solver execution:** The simulation engine is synchronous; the GUI must not freeze during a run. Threading or async design must be resolved before implementation.
 - **State management complexity:** Multi-tab GUI state is more complex than CLI; state model design must be completed before page modules are implemented.
 - **Case-store conflicts:** If a user edits a case while a simulation is running, race conditions may arise. Write-locking or copy-on-run semantics must be defined.
+- **Case-store conflicts:** Resolved by copy-on-run semantics; the running job consumes an immutable snapshot of the case state.
 - **Technology lock-in:** The chosen GUI framework constrains the deployment model. The `service_bridge.py` boundary must be preserved so the framework can be swapped if needed.
 
 ### B.9 Unit Conversion Boundary
@@ -976,3 +991,5 @@ Unit conversions shall occur exclusively at the GUI display boundary.
 - Unit preferences are stored as `str` fields in `GUIState` (one field per quantity group).
 - Conversion formula: `display_value = si_value × scale + offset`. The offset is non-zero only for temperature (K to \u00b0C: offset = \u2212273.15).
 - When `unit_preferences` is `None` or absent, all display helpers shall fall back to SI values with SI labels.
+
+Refer to [Appendix C — Laval Nozzle Back-Pressure Sweep and p/p0 Validation](appendix_c.md) for the sweep utility architecture, CLI usage, and the trend-based `p/p_0` validation-report contract.

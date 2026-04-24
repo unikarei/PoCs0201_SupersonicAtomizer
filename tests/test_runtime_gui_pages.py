@@ -204,6 +204,7 @@ def test_extract_plot_series(sample_result: SimulationResult) -> None:
         "temperature",
         "working_fluid_velocity",
         "droplet_velocity",
+        "slip_velocity",
         "Mach_number",
         "droplet_mean_diameter",
         "droplet_maximum_diameter",

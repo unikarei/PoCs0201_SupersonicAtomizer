@@ -493,6 +493,7 @@ class TestExtractPlotSeriesWithUnits:
         series = extract_plot_series(sample_result)
         expected_keys = {
             "pressure", "temperature", "working_fluid_velocity", "droplet_velocity",
+            "slip_velocity",
             "Mach_number", "droplet_mean_diameter", "droplet_maximum_diameter", "Weber_number",
         }
         assert set(series.keys()) == expected_keys

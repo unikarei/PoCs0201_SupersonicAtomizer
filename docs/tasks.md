@@ -306,7 +306,7 @@ Phase 8 is done when structured simulation results can be serialized to CSV and 
 - [x] **P8-T04 — Define plot set for MVP**
   - **Purpose:** Lock the minimum required visual outputs from the spec.
   - **Dependencies:** P8-T01.
-  - **Completion criteria:** Required plots are documented for pressure, temperature, working-fluid velocity, droplet velocity, Mach number, droplet mean diameter, droplet maximum diameter, and Weber number.
+  - **Completion criteria:** Required plots are documented for pressure, temperature, working-fluid velocity, droplet velocity, slip velocity, surface tension, Mach number, droplet mean diameter, droplet maximum diameter, and Weber number.
 
 - [x] **P8-T05 — Define plotting input contract**
   - **Purpose:** Keep plotting independent of solver internals.
@@ -813,7 +813,7 @@ Phase 23 is done when the GUI application can launch in a browser or desktop win
   - **Completion criteria:** The `gui/` package exists with the documented module layout; `service_bridge.py` wraps `ApplicationService`; tests cover import wiring and bridge call delegation.
 
 - [x] **P23-T03 — Implement case store**
-  - **Purpose:** Provide persistent case management (create, list, load, save) backed by YAML files in the `cases/` directory, using the existing config format.
+  - **Purpose:** Provide persistent case management (create, list, load, save) backed by a local YAML-backed case store in the `cases/` directory, using the existing config format.
   - **Dependencies:** P23-T02, P11-T06.
   - **Completion criteria:** `case_store.py` can create, list, load, and save cases; tests cover round-trip persistence and invalid-case handling.
 
@@ -832,11 +832,11 @@ Phase 23 is done when the GUI application can launch in a browser or desktop win
   - **Dependencies:** P23-T04.
   - **Completion criteria:** The grid table accepts tabulated area data; the preview plot updates when the table changes; nonpositive area values are rejected with inline errors; tests cover table editing and preview update behavior.
 
-- [x] **P23-T07 — Implement Solve tab — run control and convergence display**
-  - **MVP note:** Convergence controls (max iterations, convergence criterion) are not applicable because the quasi-1D solver uses a spatial marching method, not an iterative loop. Convergence display is replaced by a run-progress status indicator per the spec.md B.6 update.
-  - **Purpose:** Provide the Run button, convergence settings, solver status reporting, and convergence history display.
+- [x] **P23-T07 — Implement Solve tab — run control and status display**
+  - **MVP note:** The quasi-1D solver uses a spatial marching method, not an iterative convergence loop. Run status and completion indicators replace iterative convergence controls in the MVP GUI.
+  - **Purpose:** Provide the Run button, solver status reporting, completion outcome, and user-readable diagnostics.
   - **Dependencies:** P23-T05, P23-T06.
-  - **Completion criteria:** The Run button invokes the solver through `service_bridge.py` in a non-blocking manner; status and completion outcome are displayed; the convergence history plot updates after the run; the Run button is disabled during execution; solver errors are reported in a user-readable format; tests cover run invocation, status update, and error reporting.
+  - **Completion criteria:** The Run button invokes the solver through `service_bridge.py` in a non-blocking manner; status and completion outcome are displayed; the Run button is disabled during execution; solver errors are reported in a user-readable format; tests cover run invocation, status update, and error reporting.
 
 - [x] **P23-T08 — Implement Post Tab 1 — axial profile plots**
   - **Purpose:** Display the required axial profile plots from structured simulation results without recomputing physics in the GUI layer.
@@ -919,7 +919,7 @@ Phase 24 is done when the GUI has a configurable unit-settings page that applies
 
 ### Definition of Done
 
-Phase 25 is done when the FastAPI-based GUI can be launched from a separate script, provides the same case-management, condition-entry, simulation-run, result-display, and unit-setting capabilities as the Phase 23/24 Streamlit GUI, and all existing tests (152+) continue to pass alongside new FastAPI-specific tests.
+Phase 25 is done when the FastAPI-based GUI can be launched from a separate script, provides the same case-management, condition-entry, simulation-run, result-display, and unit-setting capabilities as the earlier Phase 23/24 Streamlit prototype, and all existing tests (152+) continue to pass alongside new FastAPI-specific tests.
 
 ### Phase 25 Prerequisites
 
@@ -967,11 +967,45 @@ Phase 25 is done when the FastAPI-based GUI can be launched from a separate scri
 
 ---
 
-## Phase 26. Laval Nozzle Internal Shock Extension
+
+## Phase 25A. SDD Reconciliation
 
 ### Definition of Done
 
-Phase 26 is done when the quasi-1D gas solver can solve supported converging-diverging Laval-nozzle internal flows across subsonic, choked/supersonic, and one internal normal-shock regime, and when a back-pressure sweep produces validation plots showing textbook-like $x$ vs $p/p_0$ internal trends up to the nozzle exit.
+Phase 25A is done when the specification, architecture, and task plan use consistent terminology for the CLI MVP, the later GUI extension, FastAPI versus Streamlit roles, solve-tab behavior, case-store persistence, and copy-on-run execution semantics.
+
+- [ ] **P25A-T01 — Align core MVP and GUI scope wording**
+  - **Purpose:** Make the release story explicit across the SDD set by separating Core MVP, GUI extension, and later advanced study features.
+  - **Dependencies:** P25-T07.
+  - **Completion criteria:** `spec.md`, `architecture.md`, and `tasks.md` describe the CLI-focused MVP and later GUI layers without contradictory scope wording.
+
+- [ ] **P25A-T02 — Standardize GUI framework terminology**
+  - **Purpose:** Make FastAPI the current primary GUI architecture while preserving Streamlit as a legacy-compatible prototype/front-end path.
+  - **Dependencies:** P25-T07.
+  - **Completion criteria:** `architecture.md` clearly distinguishes FastAPI as primary/current and Streamlit as retained compatibility history.
+
+- [ ] **P25A-T03 — Remove obsolete solve-tab convergence wording**
+  - **Purpose:** Replace iterative convergence-control language with marching-solver run status, completion outcome, diagnostics, and user-readable error reporting.
+  - **Dependencies:** P25-T07.
+  - **Completion criteria:** `spec.md`, `architecture.md`, and relevant GUI task text no longer imply max-iteration or convergence-criterion controls for the marching solver.
+
+- [ ] **P25A-T04 — Standardize case-store and run semantics**
+  - **Purpose:** Use local YAML-backed case store terminology consistently and define copy-on-run semantics for in-flight jobs.
+  - **Dependencies:** P25-T07.
+  - **Completion criteria:** The SDD set uses one case-store term consistently and explicitly states that later case edits do not affect a running job.
+
+- [ ] **P25A-T05 — Reconcile out-of-scope statements**
+  - **Purpose:** Confirm that multi-case comparison and other non-MVP GUI features remain out of scope unless separately approved.
+  - **Dependencies:** P25-T07.
+  - **Completion criteria:** The SDD set contains no ambiguous claims that promote unsupported GUI features into the MVP or current GUI scope.
+
+---
+
+## Phase 26. Laval Nozzle Back-Pressure Sweep and Validation
+
+### Definition of Done
+
+Phase 26 is done when the simulator provides a CLI-accessible back-pressure sweep utility for Laval nozzles, generates $x$ vs $p/p_0$ validation plots and summary reports, and all outputs are compatible with downstream analysis and regression testing.
 
 ### Phase 26 Prerequisites
 
@@ -981,32 +1015,63 @@ Phase 26 is done when the quasi-1D gas solver can solve supported converging-div
 
 ---
 
-- [ ] **P26-T01 — Update SDD documents for Laval-nozzle shock support**
-  - **Purpose:** Record the new supported quasi-1D internal-flow scope before runtime implementation begins.
+- [x] **P26-T01 — Update SDD documents for Laval sweep/validation**
+  - **Purpose:** Document the new CLI sweep command and automated p/p0 validation report in spec.md and tasks.md before implementation begins.
   - **Dependencies:** P25-T07.
-  - **Completion criteria:** spec.md, architecture.md, and tasks.md document choking-aware branch selection, one internal normal-shock capability, and the validation scope limited to nozzle-internal flow.
+  - **Completion criteria:** spec.md Appendix C and this phase document the sweep/validation scope, CLI interface, and validation artifact requirements.
 
-- [ ] **P26-T02 — Implement gas-state helper support for supersonic and normal-shock relations**
-  - **Purpose:** Add the quasi-1D helper formulas needed for supersonic area-Mach inversion and normal-shock state jumps.
+- [x] **P26-T02 — Implement CLI sweep command**
+  - **Purpose:** Add a CLI-accessible command/path to run the Laval nozzle back-pressure sweep utility without breaking the existing case-run workflow.
   - **Dependencies:** P26-T01.
-  - **Completion criteria:** Runtime helper functions exist for supersonic branch inversion, normal-shock downstream Mach/pressure relations, and post-shock total-pressure recovery; focused tests cover representative values and invariants.
+  - **Completion criteria:** The CLI can invoke the sweep utility with a YAML case and a set/range of back pressures; all runs are executed and labeled outputs are generated.
 
-- [ ] **P26-T03 — Extend the quasi-1D gas solver for Laval-nozzle branch selection**
-  - **Purpose:** Add runtime selection among subsonic, fully supersonic, and one internal-normal-shock branches for supported converging-diverging geometries.
+- [x] **P26-T03 — Implement p/p0 validation report**
+  - **Purpose:** Add automated p/p0-specific validation report generation for the sweep outputs and integrate it into the sweep workflow.
   - **Dependencies:** P26-T02.
-  - **Completion criteria:** The gas solver automatically selects the supported internal branch from geometry and back pressure, returns structured diagnostics for the chosen regime, and rejects unsupported geometries explicitly.
+  - **Completion criteria:** The utility produces a combined $x$ vs $p/p_0$ plot, summary CSV/JSON, and a validation report for all sweep cases.
 
-- [ ] **P26-T04 — Add runtime regression tests for Laval-nozzle internal-flow regimes**
-  - **Purpose:** Protect the new branch-selection behavior and shock-location logic against regressions.
+- [x] **P26-T04 — Test and verify sweep/validation features**
+  - **Purpose:** Add or update tests for the new CLI command and validation report, run focused regression tests, and confirm artifacts are generated.
   - **Dependencies:** P26-T03.
-  - **Completion criteria:** Runtime tests cover subsonic, internal-shock, near-exit-shock, and fully supersonic internal solutions with qualitative Mach/pressure trend assertions.
+  - **Completion criteria:** Tests cover CLI sweep invocation, output artifact generation, and validation report content; all tests pass.
 
-- [ ] **P26-T05 — Add Laval-nozzle validation examples and sweep utility**
-  - **Purpose:** Provide a reproducible internal-flow test case and a utility that varies back pressure across textbook Laval-nozzle regimes.
-  - **Dependencies:** P26-T04.
-  - **Completion criteria:** A reusable Laval-nozzle case definition and a back-pressure sweep utility exist, producing labeled profiles for `b`, `d`, `g`, `h`, `j`, and `k` (with `j` and `k` sharing the same internal solution family).
+---
 
-- [ ] **P26-T06 — Execute the back-pressure validation sweep and review qualitative agreement**
-  - **Purpose:** Confirm that the new internal-flow solver reproduces textbook-like $x$ vs $p/p_0$ trends up to the nozzle exit.
-  - **Dependencies:** P26-T05.
-  - **Completion criteria:** The sweep runs successfully, plot artifacts are generated, and the resulting qualitative agreement or limitations are recorded in run notes or validation output.
+## Phase 27. GUI Multi-Value Conditions Sweep and Overlay
+
+### Definition of Done
+
+Phase 27 is done when the FastAPI GUI accepts comma/space-separated multi-value numeric condition inputs, expands them into immutable per-run payloads at Solve time, overlays the resulting runs in the Graphs tab, aggregates them in the results table/CSV export, and the SDD plus focused tests are updated accordingly.
+
+### Phase 27 Prerequisites
+
+- Phase 25 must be complete.
+- Phase 25A may be updated as part of this phase where terminology needs to be reconciled.
+- The case store must remain YAML-compatible with the single-case runtime schema.
+
+---
+
+- [x] **P27-T01 — Update SDD for GUI multi-value Conditions sweeps**
+  - **Purpose:** Document multi-value numeric Conditions input, solve-time sweep expansion, overlay graphs, and aggregated results behavior before implementation.
+  - **Dependencies:** P25-T07.
+  - **Completion criteria:** `spec.md`, `architecture.md`, and `tasks.md` describe the behavior and preserve the case-store/copy-on-run boundaries.
+
+- [x] **P27-T02 — Implement GUI-side numeric token parsing and sweep expansion**
+  - **Purpose:** Add a GUI-layer helper that parses comma/space-separated SI numeric tokens, validates them, and expands them into immutable single-run payloads.
+  - **Dependencies:** P27-T01.
+  - **Completion criteria:** Multi-value parsing is reusable and tested; malformed tokens and excessive Cartesian-product expansions are rejected with clear errors.
+
+- [x] **P27-T03 — Extend FastAPI Solve flow for multi-run execution**
+  - **Purpose:** Let the FastAPI `/api/simulation/run` flow accept a UI snapshot, expand multi-value Conditions inputs, and execute one solver run per expanded payload without changing solver internals.
+  - **Dependencies:** P27-T02.
+  - **Completion criteria:** The run endpoint preserves copy-on-run semantics, uses immutable per-run snapshots, and returns aggregated job results for completed sweeps.
+
+- [x] **P27-T04 — Implement overlay Graphs and aggregated Table/CSV display**
+  - **Purpose:** Use structured per-run `SimulationResult` objects to overlay plots with legends and aggregate results rows with run labels.
+  - **Dependencies:** P27-T03.
+  - **Completion criteria:** The Graphs tab overlays runs on shared axes, the Table tab includes run labels, and CSV export includes aggregated rows.
+
+- [x] **P27-T05 — Add focused tests and verify regression safety**
+  - **Purpose:** Protect numeric parsing, sweep expansion, FastAPI job execution, overlay plot generation, and aggregated table behavior.
+  - **Dependencies:** P27-T04.
+  - **Completion criteria:** New focused tests pass alongside the existing suite, including a full `pytest` run.

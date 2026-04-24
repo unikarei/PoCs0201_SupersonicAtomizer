@@ -17,6 +17,7 @@ let pollTimer      = null;
 let plotData       = {};   // field → base64 PNG
 let csvContent     = "";
 let tableRows      = [];
+const MULTI_VALUE_SPLIT_RE = /[\s,;，、]+/;
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
 async function apiFetch(url, options = {}) {
@@ -41,6 +42,33 @@ function hideError(el) {
 function setStatus(el, msg, cls) {
   el.textContent = msg;
   el.className = "solve-status " + (cls || "");
+}
+
+function splitNumericTokens(rawValue) {
+  if (rawValue === null || rawValue === undefined) return [];
+  const text = String(rawValue).trim();
+  if (!text) return [];
+  return text.split(MULTI_VALUE_SPLIT_RE).filter(Boolean);
+}
+
+function parseSingleNumericValue(rawValue, label, { optional = false } = {}) {
+  const tokens = splitNumericTokens(rawValue);
+  if (tokens.length === 0) {
+    if (optional) return null;
+    throw new Error(`${label} is required.`);
+  }
+  // Allow multiple tokens in the input but when saving a case use the first
+  // numeric token. The UI still encourages using the Solve button for
+  // multi-value sweeps. This avoids blocking users who accidentally click
+  // Save after entering a sweep list.
+  if (tokens.length > 1) {
+    console.warn(`${label}: multiple values provided; saving will use the first value (${tokens[0]}). Use Solve to run a sweep.`);
+  }
+  const value = Number(tokens[0]);
+  if (Number.isNaN(value)) {
+    throw new Error(`${label} must be numeric.`);
+  }
+  return value;
 }
 
 // ── Tab navigation ─────────────────────────────────────────────────────────────
@@ -129,41 +157,105 @@ function populateConditionsForm(cfg) {
 
 function setFieldValue(form, name, value) {
   const el = form.elements[name];
-  if (el) el.value = value;
+  if (!el) return;
+  if (Array.isArray(value)) {
+    // display arrays as space-separated tokens for readability
+    el.value = value.join(" ");
+  } else {
+    el.value = value;
+  }
 }
 
-function readConditionsForm() {
+
+function parseNumericOrList(rawValue, label, { optional = false } = {}) {
+  // Accept a space/comma/semicolon separated list or a single numeric value.
+  // Returns a Number if single token, or an Array<Number> if multiple tokens,
+  // or null if optional and empty.
+  if (rawValue === null || rawValue === undefined) {
+    if (optional) return null;
+    throw new Error(`${label} is required.`);
+  }
+  const tokens = splitNumericTokens(rawValue);
+  if (tokens.length === 0) {
+    if (optional) return null;
+    throw new Error(`${label} is required.`);
+  }
+  const nums = tokens.map(t => {
+    const v = Number(t);
+    if (Number.isNaN(v)) throw new Error(`${label} must be numeric.`);
+    return v;
+  });
+  return nums.length === 1 ? nums[0] : nums;
+}
+
+function readConditionsFormForRun() {
   const f = document.getElementById("conditions-form");
   const fl = f.elements.working_fluid.value;
-  const wetness = parseFloat(f.elements.inlet_wetness.value);
   const cfg = {
     fluid: { working_fluid: fl },
     boundary_conditions: {
-      Pt_in:  parseFloat(f.elements.Pt_in.value),
-      Tt_in:  parseFloat(f.elements.Tt_in.value),
-      Ps_out: parseFloat(f.elements.Ps_out.value),
+      Pt_in:  f.elements.Pt_in.value.trim(),
+      Tt_in:  f.elements.Tt_in.value.trim(),
+      Ps_out: f.elements.Ps_out.value.trim(),
     },
     droplet_injection: {
-      droplet_velocity_in:      parseFloat(f.elements.droplet_velocity_in.value),
-      droplet_diameter_mean_in: parseFloat(f.elements.droplet_diameter_mean_in.value),
-      droplet_diameter_max_in:  parseFloat(f.elements.droplet_diameter_max_in.value),
+      droplet_velocity_in:      f.elements.droplet_velocity_in.value.trim(),
+      droplet_diameter_mean_in: f.elements.droplet_diameter_mean_in.value.trim(),
+      droplet_diameter_max_in:  f.elements.droplet_diameter_max_in.value.trim(),
     },
     models: {
       breakup_model:         "weber_critical",
-      critical_weber_number: parseFloat(f.elements.critical_weber_number.value),
-      breakup_factor_mean:   parseFloat(f.elements.breakup_factor_mean.value),
-      breakup_factor_max:    parseFloat(f.elements.breakup_factor_max.value),
+      critical_weber_number: f.elements.critical_weber_number.value.trim(),
+      breakup_factor_mean:   f.elements.breakup_factor_mean.value.trim(),
+      breakup_factor_max:    f.elements.breakup_factor_max.value.trim(),
     },
   };
-  if (!isNaN(wetness)) cfg.fluid.inlet_wetness = wetness;
+  const wetness = f.elements.inlet_wetness.value.trim();
+  if (wetness) cfg.fluid.inlet_wetness = wetness;
   return cfg;
+}
+
+function readConditionsFormForSave() {
+  const f = document.getElementById("conditions-form");
+  const cfg = {
+    fluid: { working_fluid: f.elements.working_fluid.value },
+    boundary_conditions: {
+      Pt_in: parseNumericOrList(f.elements.Pt_in.value, "Inlet total pressure P₀ [Pa]"),
+      Tt_in: parseNumericOrList(f.elements.Tt_in.value, "Inlet total temperature T₀ [K]"),
+      Ps_out: parseNumericOrList(f.elements.Ps_out.value, "Outlet static pressure P₂ [Pa]"),
+    },
+    droplet_injection: {
+      droplet_velocity_in: parseNumericOrList(f.elements.droplet_velocity_in.value, "Initial droplet velocity [m/s]"),
+      droplet_diameter_mean_in: parseNumericOrList(f.elements.droplet_diameter_mean_in.value, "Mean droplet diameter [m]"),
+      droplet_diameter_max_in: parseNumericOrList(f.elements.droplet_diameter_max_in.value, "Maximum droplet diameter [m]"),
+    },
+    models: {
+      breakup_model: "weber_critical",
+      critical_weber_number: parseNumericOrList(f.elements.critical_weber_number.value, "Critical Weber number"),
+      breakup_factor_mean: parseNumericOrList(f.elements.breakup_factor_mean.value, "Breakup factor — mean diameter"),
+      breakup_factor_max: parseNumericOrList(f.elements.breakup_factor_max.value, "Breakup factor — maximum diameter"),
+    },
+  };
+  const wetness = parseNumericOrList(f.elements.inlet_wetness.value, "Inlet wetness", { optional: true });
+  if (wetness !== null) cfg.fluid.inlet_wetness = wetness;
+  return cfg;
+}
+
+async function buildRunConfigSnapshot() {
+  const current = { ...readConditionsFormForRun(), ...readGridForm() };
+  try {
+    const existing = await apiFetch(`/api/cases/${encodeURIComponent(activeCaseName)}`);
+    return { ...existing, ...current };
+  } catch (_e) {
+    return current;
+  }
 }
 
 document.getElementById("btn-save-conditions").addEventListener("click", async () => {
   if (!activeCaseName) { alert("Select or create a case first."); return; }
   const statusEl = document.getElementById("conditions-status");
   try {
-    const condCfg = readConditionsForm();
+    const condCfg = readConditionsFormForSave();
     // Merge with existing grid config
     const existing = await apiFetch(`/api/cases/${encodeURIComponent(activeCaseName)}`);
     const merged = { ...existing, ...condCfg };
@@ -173,6 +265,7 @@ document.getElementById("btn-save-conditions").addEventListener("click", async (
       body: JSON.stringify(merged),
     });
     statusEl.textContent = "✓ Saved";
+    statusEl.style.color = "";
     setTimeout(() => { statusEl.textContent = ""; }, 2000);
   } catch (e) {
     statusEl.textContent = "Error: " + e.message;
@@ -279,12 +372,36 @@ function drawAreaPreview(xs, As) {
 function readGridForm() {
   const f = document.getElementById("grid-form");
   const area = readAreaTable();
+  const xStart = parseFloat(f.elements.x_start.value);
+  const xEnd = parseFloat(f.elements.x_end.value);
+  // Ensure area table endpoints include x_start and x_end. If the user
+  // provided a table that doesn't include them, prepend/append entries
+  // copying the nearest A value so the solver receives matching endpoints.
+  const xs = Array.isArray(area.x) ? area.x.slice() : [];
+  const As = Array.isArray(area.A) ? area.A.slice() : [];
+  const epsilon = 1e-12;
+  if (xs.length === 0) {
+    xs.push(xStart, xEnd);
+    As.push(1e-4, 1e-4);
+  } else {
+    if (Math.abs(xs[0] - xStart) > epsilon) {
+      const firstA = (As.length > 0 ? As[0] : 1e-4);
+      xs.unshift(xStart);
+      As.unshift(firstA);
+    }
+    if (Math.abs(xs[xs.length - 1] - xEnd) > epsilon) {
+      const lastA = (As.length > 0 ? As[As.length - 1] : 1e-4);
+      xs.push(xEnd);
+      As.push(lastA);
+    }
+  }
+
   return {
     geometry: {
-      x_start: parseFloat(f.elements.x_start.value),
-      x_end:   parseFloat(f.elements.x_end.value),
+      x_start: xStart,
+      x_end:   xEnd,
       n_cells: parseInt(f.elements.n_cells.value, 10),
-      area_distribution: { type: "table", ...area },
+      area_distribution: { type: "table", x: xs, A: As },
     },
   };
 }
@@ -321,10 +438,11 @@ btnRun.addEventListener("click", async () => {
   setStatus(solveStatus, "Starting simulation…");
 
   try {
+    const runConfig = await buildRunConfigSnapshot();
     const data = await apiFetch("/api/simulation/run", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ case_name: activeCaseName }),
+      body: JSON.stringify({ case_name: activeCaseName, config: runConfig }),
     });
     currentJobId = data.job_id;
     startPolling(currentJobId);
@@ -359,7 +477,6 @@ function startPolling(jobId) {
 
 async function onRunCompleted(jobId) {
   solveProgress.classList.add("hidden");
-  setStatus(solveStatus, "✓ Simulation completed successfully.", "success");
   btnRun.disabled = false;
 
   try {
@@ -368,6 +485,11 @@ async function onRunCompleted(jobId) {
     tableRows  = data.table_rows || [];
     csvContent = data.csv || "";
     const fields = data.plot_fields || Object.keys(plotData);
+    const runCount = data.run_count || 1;
+    const statusMessage = runCount > 1
+      ? `✓ Simulation sweep completed successfully (${runCount} runs).`
+      : "✓ Simulation completed successfully.";
+    setStatus(solveStatus, statusMessage, "success");
     renderPlots(fields);
     renderTable(tableRows);
     document.getElementById("btn-download-csv").disabled = false;

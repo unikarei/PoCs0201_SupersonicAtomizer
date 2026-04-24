@@ -41,6 +41,7 @@
     <!-- ── Pre Tab 1: Analysis Conditions ──────────────────────────────────── -->
     <section id="tab-pre-conditions" class="tab-content active">
       <h3>Analysis Conditions</h3>
+      <p class="help-text">Numeric fields accept a single SI value for case saving, or multiple SI values separated by spaces, commas, semicolons, or newlines for Solve-tab parameter sweeps.</p>
       <form id="conditions-form">
         <fieldset>
           <legend>Working Fluid</legend>
@@ -51,46 +52,46 @@
             </select>
           </label>
           <label>Inlet wetness (steam only, optional)
-            <input type="number" name="inlet_wetness" step="0.001" min="0" max="1" placeholder="e.g. 0.05" />
+            <input type="text" name="inlet_wetness" inputmode="decimal" placeholder="e.g. 0.05 or 0.0, 0.05" />
           </label>
         </fieldset>
 
         <fieldset>
           <legend>Boundary Conditions</legend>
           <label>Inlet total pressure P₀ [Pa]
-            <input type="number" name="Pt_in" step="1" min="0" required value="200000" />
+            <input type="text" name="Pt_in" inputmode="decimal" required value="200000" />
           </label>
           <label>Inlet total temperature T₀ [K]
-            <input type="number" name="Tt_in" step="0.1" min="0" required value="400" />
+            <input type="text" name="Tt_in" inputmode="decimal" required value="400" />
           </label>
           <label>Outlet static pressure P₂ [Pa]
-            <input type="number" name="Ps_out" step="1" min="0" required value="101325" />
+            <input type="text" name="Ps_out" inputmode="decimal" required value="101325" />
           </label>
         </fieldset>
 
         <fieldset>
           <legend>Droplet Injection</legend>
           <label>Initial droplet velocity [m/s]
-            <input type="number" name="droplet_velocity_in" step="0.01" min="0" required value="10" />
+            <input type="text" name="droplet_velocity_in" inputmode="decimal" required value="10" />
           </label>
           <label>Mean droplet diameter [m]
-            <input type="number" name="droplet_diameter_mean_in" step="1e-7" min="0" required value="0.00005" />
+            <input type="text" name="droplet_diameter_mean_in" inputmode="decimal" required value="0.00005" />
           </label>
           <label>Maximum droplet diameter [m]
-            <input type="number" name="droplet_diameter_max_in" step="1e-7" min="0" required value="0.0001" />
+            <input type="text" name="droplet_diameter_max_in" inputmode="decimal" required value="0.0001" />
           </label>
         </fieldset>
 
         <fieldset>
           <legend>Breakup Parameters</legend>
           <label>Critical Weber number
-            <input type="number" name="critical_weber_number" step="0.1" min="0" required value="12" />
+            <input type="text" name="critical_weber_number" inputmode="decimal" required value="12" />
           </label>
           <label>Breakup factor — mean diameter
-            <input type="number" name="breakup_factor_mean" step="0.01" min="0" max="1" required value="0.5" />
+            <input type="text" name="breakup_factor_mean" inputmode="decimal" required value="0.5" />
           </label>
           <label>Breakup factor — maximum diameter
-            <input type="number" name="breakup_factor_max" step="0.01" min="0" max="1" required value="0.5" />
+            <input type="text" name="breakup_factor_max" inputmode="decimal" required value="0.5" />
           </label>
         </fieldset>
 

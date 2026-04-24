@@ -35,6 +35,11 @@ def _build_settings_summary(case_config: CaseConfig) -> dict[str, object]:
 			"working_fluid": case_config.fluid.working_fluid,
 			"inlet_wetness": case_config.fluid.inlet_wetness,
 		},
+		"boundary_conditions": {
+			"Pt_in": case_config.boundary_conditions.Pt_in,
+			"Tt_in": case_config.boundary_conditions.Tt_in,
+			"Ps_out": case_config.boundary_conditions.Ps_out,
+		},
 		"models": {
 			"drag_model": case_config.models.drag_model,
 			"breakup_model": case_config.models.breakup_model,

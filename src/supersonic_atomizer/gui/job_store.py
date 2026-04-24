@@ -12,7 +12,7 @@ from __future__ import annotations
 import threading
 import uuid
 from dataclasses import dataclass
-from typing import Optional
+from typing import Any, Optional
 
 from supersonic_atomizer.app.services import SimulationRunResult
 
@@ -21,7 +21,7 @@ from supersonic_atomizer.app.services import SimulationRunResult
 class JobRecord:
     job_id: str
     status: str = "running"           # "running" | "completed" | "failed"
-    result: Optional[SimulationRunResult] = None
+    result: Optional[Any] = None
     error: Optional[str] = None
 
 
@@ -39,7 +39,7 @@ class JobStore:
             self._jobs[job_id] = JobRecord(job_id=job_id)
         return job_id
 
-    def mark_complete(self, job_id: str, result: SimulationRunResult) -> None:
+    def mark_complete(self, job_id: str, result: Any) -> None:
         with self._lock:
             record = self._jobs.get(job_id)
             if record is not None:
