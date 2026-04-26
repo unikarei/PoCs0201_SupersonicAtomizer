@@ -148,8 +148,10 @@ function populateConditionsForm(cfg) {
   setFieldValue(f, "Tt_in", bc.Tt_in ?? "");
   setFieldValue(f, "Ps_out", bc.Ps_out ?? "");
   setFieldValue(f, "droplet_velocity_in", di.droplet_velocity_in ?? "");
+  setFieldValue(f, "water_mass_flow_rate", di.water_mass_flow_rate ?? "");
   setFieldValue(f, "droplet_diameter_mean_in", di.droplet_diameter_mean_in ?? "");
   setFieldValue(f, "droplet_diameter_max_in", di.droplet_diameter_max_in ?? "");
+  setFieldValue(f, "coupling_mode", ms.coupling_mode ?? "one_way");
   setFieldValue(f, "critical_weber_number", ms.critical_weber_number ?? "");
   setFieldValue(f, "breakup_factor_mean", ms.breakup_factor_mean ?? "");
   setFieldValue(f, "breakup_factor_max", ms.breakup_factor_max ?? "");
@@ -191,6 +193,7 @@ function parseNumericOrList(rawValue, label, { optional = false } = {}) {
 function readConditionsFormForRun() {
   const f = document.getElementById("conditions-form");
   const fl = f.elements.working_fluid.value;
+  const couplingMode = f.elements.coupling_mode.value;
   const cfg = {
     fluid: { working_fluid: fl },
     boundary_conditions: {
@@ -204,6 +207,7 @@ function readConditionsFormForRun() {
       droplet_diameter_max_in:  f.elements.droplet_diameter_max_in.value.trim(),
     },
     models: {
+      coupling_mode:         couplingMode,
       breakup_model:         "weber_critical",
       critical_weber_number: f.elements.critical_weber_number.value.trim(),
       breakup_factor_mean:   f.elements.breakup_factor_mean.value.trim(),
@@ -212,11 +216,14 @@ function readConditionsFormForRun() {
   };
   const wetness = f.elements.inlet_wetness.value.trim();
   if (wetness) cfg.fluid.inlet_wetness = wetness;
+  const waterMassFlowRate = f.elements.water_mass_flow_rate.value.trim();
+  if (waterMassFlowRate) cfg.droplet_injection.water_mass_flow_rate = waterMassFlowRate;
   return cfg;
 }
 
 function readConditionsFormForSave() {
   const f = document.getElementById("conditions-form");
+  const couplingMode = f.elements.coupling_mode.value;
   const cfg = {
     fluid: { working_fluid: f.elements.working_fluid.value },
     boundary_conditions: {
@@ -230,6 +237,7 @@ function readConditionsFormForSave() {
       droplet_diameter_max_in: parseNumericOrList(f.elements.droplet_diameter_max_in.value, "Maximum droplet diameter [m]"),
     },
     models: {
+      coupling_mode: couplingMode,
       breakup_model: "weber_critical",
       critical_weber_number: parseNumericOrList(f.elements.critical_weber_number.value, "Critical Weber number"),
       breakup_factor_mean: parseNumericOrList(f.elements.breakup_factor_mean.value, "Breakup factor — mean diameter"),
@@ -238,6 +246,12 @@ function readConditionsFormForSave() {
   };
   const wetness = parseNumericOrList(f.elements.inlet_wetness.value, "Inlet wetness", { optional: true });
   if (wetness !== null) cfg.fluid.inlet_wetness = wetness;
+  const waterMassFlowRate = parseNumericOrList(
+    f.elements.water_mass_flow_rate.value,
+    "Water mass flow rate [kg/s]",
+    { optional: true },
+  );
+  if (waterMassFlowRate !== null) cfg.droplet_injection.water_mass_flow_rate = waterMassFlowRate;
   return cfg;
 }
 

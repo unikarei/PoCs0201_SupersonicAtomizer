@@ -135,11 +135,28 @@ def _validate_models_section(raw_config: dict[str, Any]) -> None:
         return
 
     models_section = _require_mapping(raw_config, "models")
-    string_fields = ("drag_model", "breakup_model", "steam_property_model")
+    string_fields = (
+        "drag_model",
+        "breakup_model",
+        "steam_property_model",
+        "gas_solver_mode",
+        "coupling_mode",
+        "droplet_distribution_model",
+    )
     numeric_fields = (
+        "droplet_density",
+        "droplet_sphericity",
         "critical_weber_number",
         "breakup_factor_mean",
         "breakup_factor_max",
+        "two_way_feedback_relaxation",
+        "two_way_convergence_tolerance",
+        "droplet_distribution_sigma",
+        "khrt_B0",
+        "khrt_B1",
+        "khrt_Crt",
+        "liquid_density",
+        "liquid_viscosity",
     )
 
     for field_name in string_fields:
@@ -149,6 +166,11 @@ def _validate_models_section(raw_config: dict[str, Any]) -> None:
     for field_name in numeric_fields:
         if field_name in models_section and not _is_number(models_section[field_name]):
             raise ValueError(f"Field 'models.{field_name}' must be numeric when supplied.")
+
+    if "two_way_max_iterations" in models_section:
+        value = models_section["two_way_max_iterations"]
+        if not isinstance(value, int) or isinstance(value, bool):
+            raise ValueError("Field 'models.two_way_max_iterations' must be an integer when supplied.")
 
 
 def _validate_outputs_section(raw_config: dict[str, Any]) -> None:

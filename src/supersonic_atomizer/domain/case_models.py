@@ -52,11 +52,25 @@ class ModelSelectionConfig:
     """Validated model selectors and tunable model parameters."""
 
     drag_model: str = "standard_sphere"
+    droplet_density: float = 998.2
+    droplet_sphericity: float = 1.0
     breakup_model: str = "weber_critical"
     critical_weber_number: float = 12.0
     breakup_factor_mean: float | None = None
     breakup_factor_max: float | None = None
     steam_property_model: str | None = None
+    gas_solver_mode: str = "baseline"
+    coupling_mode: str = "one_way"
+    two_way_max_iterations: int = 3
+    two_way_feedback_relaxation: float = 0.35
+    two_way_convergence_tolerance: float = 1.0e-3
+    droplet_distribution_model: str = "mono"
+    droplet_distribution_sigma: float = 0.35
+    khrt_B0: float = 0.61
+    khrt_B1: float = 40.0
+    khrt_Crt: float = 0.1
+    liquid_density: float = 998.2
+    liquid_viscosity: float = 1.002e-3
 
 
 @dataclass(frozen=True, slots=True)

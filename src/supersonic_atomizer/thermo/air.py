@@ -9,6 +9,15 @@ from supersonic_atomizer.domain import ThermoState
 from supersonic_atomizer.thermo.interfaces import ThermoProvider, ThermoProviderMetadata
 
 
+def _sutherland_air_viscosity(temperature: float) -> float:
+    reference_temperature = 273.15
+    reference_viscosity = 1.716e-5
+    sutherland_constant = 111.0
+    return reference_viscosity * (temperature / reference_temperature) ** 1.5 * (
+        reference_temperature + sutherland_constant
+    ) / (temperature + sutherland_constant)
+
+
 @dataclass(frozen=True, slots=True)
 class AirThermoProvider(ThermoProvider):
     """Simple ideal-gas air provider with constant thermophysical properties."""
@@ -75,4 +84,5 @@ class AirThermoProvider(ThermoProvider):
             density=density,
             enthalpy=enthalpy,
             sound_speed=sound_speed,
+            dynamic_viscosity=_sutherland_air_viscosity(temperature),
         )

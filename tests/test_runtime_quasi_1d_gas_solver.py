@@ -4,9 +4,9 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from supersonic_atomizer.domain import BoundaryConditionConfig, GasSolution, GeometryConfig
+from supersonic_atomizer.domain import BoundaryConditionConfig, CouplingSourceTerms, GasSolution, GeometryConfig
 from supersonic_atomizer.geometry import build_geometry_model
-from supersonic_atomizer.solvers.gas import solve_quasi_1d_gas_flow
+from supersonic_atomizer.solvers.gas import apply_coupling_source_terms, solve_quasi_1d_gas_flow
 from supersonic_atomizer.thermo import AirThermoProvider
 
 
@@ -130,6 +130,39 @@ class TestRuntimeQuasi1DGasSolver(unittest.TestCase):
         self.assertTrue(any(value > 1.0 for value in diverging_mach))
         self.assertLess(gas_solution.mach_number_values[-1], 1.0)
         self.assertTrue(any("selected_branch=internal_normal_shock" in message or "selected_branch=exit_normal_shock" in message for message in gas_solution.diagnostics.messages))
+
+    def test_applies_coupling_source_terms_to_reduce_velocity(self) -> None:
+        geometry_model = build_geometry_model(
+            GeometryConfig(
+                x_start=0.0,
+                x_end=0.1,
+                n_cells=4,
+                area_definition={
+                    "type": "table",
+                    "x": [0.0, 0.1],
+                    "A": [1.0e-4, 1.0e-4],
+                },
+            )
+        )
+        gas_solution = solve_quasi_1d_gas_flow(
+            geometry_model=geometry_model,
+            boundary_conditions=BoundaryConditionConfig(Pt_in=105000.0, Tt_in=300.0, Ps_out=100000.0),
+            thermo_provider=AirThermoProvider(),
+        )
+        source_terms = CouplingSourceTerms(
+            mass_source_values=tuple(0.0 for _ in gas_solution.states),
+            momentum_source_values=tuple(-5.0 for _ in gas_solution.states),
+            energy_source_values=tuple(0.0 for _ in gas_solution.states),
+        )
+
+        corrected = apply_coupling_source_terms(
+            base_gas_solution=gas_solution,
+            coupling_source_terms=source_terms,
+            relaxation=0.2,
+        )
+
+        self.assertLess(corrected.velocity_values[-1], gas_solution.velocity_values[-1])
+        self.assertTrue(any("two_way_source_terms_applied" in message for message in corrected.diagnostics.messages))
 
 
 if __name__ == "__main__":

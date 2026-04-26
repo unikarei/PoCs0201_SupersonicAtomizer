@@ -110,6 +110,25 @@ def _validate_droplet_injection(raw_config: dict[str, Any]) -> None:
 def _validate_models(raw_config: dict[str, Any]) -> None:
     models = raw_config.get("models", {})
 
+    drag_model = models.get("drag_model", "standard_sphere")
+    if drag_model not in {"standard_sphere", "nonspherical_sphere"}:
+        raise ValueError(
+            "Field 'models.drag_model' must be 'standard_sphere' or 'nonspherical_sphere'."
+        )
+
+    droplet_density = models.get("droplet_density", 998.2)
+    _require_positive(droplet_density, "models.droplet_density")
+
+    droplet_sphericity = models.get("droplet_sphericity", 1.0)
+    if droplet_sphericity <= 0.0 or droplet_sphericity > 1.0:
+        raise ValueError("Field 'models.droplet_sphericity' must be greater than 0 and less than or equal to 1.")
+
+    gas_solver_mode = models.get("gas_solver_mode", "baseline")
+    if gas_solver_mode not in {"baseline", "shock_refined"}:
+        raise ValueError(
+            "Field 'models.gas_solver_mode' must be 'baseline' or 'shock_refined'."
+        )
+
     critical_weber_number = models.get("critical_weber_number")
     if critical_weber_number is not None:
         _require_positive(critical_weber_number, "models.critical_weber_number")
@@ -121,6 +140,59 @@ def _validate_models(raw_config: dict[str, Any]) -> None:
     breakup_factor_max = models.get("breakup_factor_max")
     if breakup_factor_max is not None:
         _require_positive(breakup_factor_max, "models.breakup_factor_max")
+
+    breakup_model = models.get("breakup_model", "weber_critical")
+    if breakup_model not in {"weber_critical", "khrt", "bag_stripping"}:
+        raise ValueError(
+            "Field 'models.breakup_model' must be 'weber_critical', 'khrt', or 'bag_stripping'."
+        )
+
+    for param_name in ("khrt_B0", "khrt_B1", "khrt_Crt", "liquid_density", "liquid_viscosity"):
+        param_value = models.get(param_name)
+        if param_value is not None:
+            _require_positive(param_value, f"models.{param_name}")
+
+    coupling_mode = models.get("coupling_mode", "one_way")
+    if coupling_mode not in {"one_way", "two_way_approx", "two_way_coupled"}:
+        raise ValueError(
+            "Field 'models.coupling_mode' must be 'one_way', 'two_way_approx', or 'two_way_coupled'."
+        )
+
+    two_way_max_iterations = models.get("two_way_max_iterations", 3)
+    if two_way_max_iterations <= 0:
+        raise ValueError("Field 'models.two_way_max_iterations' must be positive.")
+
+    two_way_feedback_relaxation = models.get("two_way_feedback_relaxation", 0.35)
+    _require_positive(two_way_feedback_relaxation, "models.two_way_feedback_relaxation")
+
+    two_way_convergence_tolerance = models.get("two_way_convergence_tolerance", 1.0e-3)
+    _require_positive(two_way_convergence_tolerance, "models.two_way_convergence_tolerance")
+
+    droplet_distribution_model = models.get("droplet_distribution_model", "mono")
+    if droplet_distribution_model not in {"mono", "lognormal_moments"}:
+        raise ValueError(
+            "Field 'models.droplet_distribution_model' must be 'mono' or 'lognormal_moments'."
+        )
+
+    droplet_distribution_sigma = models.get("droplet_distribution_sigma", 0.35)
+    _require_positive(droplet_distribution_sigma, "models.droplet_distribution_sigma")
+
+    if coupling_mode in {"two_way_approx", "two_way_coupled"}:
+        water_mass_flow_rate = raw_config["droplet_injection"].get("water_mass_flow_rate")
+        if water_mass_flow_rate is None:
+            raise ValueError(
+                "Field 'droplet_injection.water_mass_flow_rate' is required when models.coupling_mode is 'two_way_approx' or 'two_way_coupled'."
+            )
+
+    steam_property_model = models.get("steam_property_model")
+    if steam_property_model is not None and steam_property_model not in {
+        "equilibrium_mvp",
+        "if97_ready_equilibrium",
+        "if97",
+    }:
+        raise ValueError(
+            "Field 'models.steam_property_model' must be 'equilibrium_mvp', 'if97_ready_equilibrium', or 'if97' when supplied."
+        )
 
 
 def validate_semantic_config(raw_config: dict[str, Any]) -> dict[str, Any]:

@@ -50,6 +50,8 @@ class TestConfigTranslationRuntime(unittest.TestCase):
         self.assertEqual(case_config.boundary_conditions.Ps_out, 100000.0)
         self.assertEqual(case_config.geometry.area_definition["type"], "table")
         self.assertEqual(case_config.models.drag_model, "standard_sphere")
+        self.assertEqual(case_config.models.droplet_distribution_model, "mono")
+        self.assertEqual(case_config.models.two_way_convergence_tolerance, 1.0e-3)
         self.assertEqual(case_config.outputs.output_directory, "outputs")
 
     def test_translates_representative_steam_case_with_explicit_options(self) -> None:
@@ -83,6 +85,12 @@ class TestConfigTranslationRuntime(unittest.TestCase):
                 "models": {
                     "drag_model": "standard_sphere",
                     "breakup_model": "weber_critical",
+                    "coupling_mode": "two_way_approx",
+                    "two_way_max_iterations": 4,
+                    "two_way_feedback_relaxation": 0.2,
+                    "two_way_convergence_tolerance": 5.0e-4,
+                    "droplet_distribution_model": "lognormal_moments",
+                    "droplet_distribution_sigma": 0.45,
                     "critical_weber_number": 15.0,
                     "breakup_factor_mean": 0.7,
                     "breakup_factor_max": 0.6,
@@ -102,6 +110,12 @@ class TestConfigTranslationRuntime(unittest.TestCase):
         self.assertEqual(case_config.fluid.working_fluid, "steam")
         self.assertEqual(case_config.fluid.inlet_wetness, 0.03)
         self.assertEqual(case_config.droplet_injection.water_mass_flow_rate, 0.001)
+        self.assertEqual(case_config.models.coupling_mode, "two_way_approx")
+        self.assertEqual(case_config.models.two_way_max_iterations, 4)
+        self.assertEqual(case_config.models.two_way_feedback_relaxation, 0.2)
+        self.assertEqual(case_config.models.two_way_convergence_tolerance, 5.0e-4)
+        self.assertEqual(case_config.models.droplet_distribution_model, "lognormal_moments")
+        self.assertEqual(case_config.models.droplet_distribution_sigma, 0.45)
         self.assertEqual(case_config.models.critical_weber_number, 15.0)
         self.assertEqual(case_config.models.steam_property_model, "if97")
         self.assertEqual(case_config.outputs.output_directory, "custom_outputs")

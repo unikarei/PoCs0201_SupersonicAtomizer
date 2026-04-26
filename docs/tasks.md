@@ -1075,3 +1075,223 @@ Phase 27 is done when the FastAPI GUI accepts comma/space-separated multi-value 
   - **Purpose:** Protect numeric parsing, sweep expansion, FastAPI job execution, overlay plot generation, and aggregated table behavior.
   - **Dependencies:** P27-T04.
   - **Completion criteria:** New focused tests pass alongside the existing suite, including a full `pytest` run.
+
+---
+
+## Phase 28. Selectable Coupling Mode (One-Way / Two-Way Approx)
+
+### Definition of Done
+
+Phase 28 is done when users can select `one_way` (legacy) or `two_way_approx` (reduced-order iterative feedback) from configuration and the FastAPI GUI Conditions tab, with runtime validation, application orchestration branching, and focused regression tests in place.
+
+### Phase 28 Prerequisites
+
+- Phase 18 must be complete.
+- Phase 25 must be complete.
+- Phase 27 may remain available unchanged.
+
+---
+
+- [x] **P28-T01 — Update SDD documents for coupling-mode selection**
+  - **Purpose:** Document coupling-mode scope and behavior in `spec.md` and `architecture.md` before runtime implementation.
+  - **Dependencies:** P27-T05.
+  - **Completion criteria:** `spec.md`, `architecture.md`, and `tasks.md` describe `one_way` and `two_way_approx` semantics consistently.
+
+- [x] **P28-T02 — Extend config and domain models for coupling-mode parameters**
+  - **Purpose:** Add `coupling_mode`, `two_way_max_iterations`, and `two_way_feedback_relaxation` to defaults, schema validation, semantic validation, and typed domain models.
+  - **Dependencies:** P28-T01.
+  - **Completion criteria:** Config translation exposes coupling-mode parameters via `ModelSelectionConfig`; invalid selections are rejected with explicit errors.
+
+- [x] **P28-T03 — Implement application-service branching for two-way approximation**
+  - **Purpose:** Keep the legacy one-way path unchanged while adding a reduced-order two-way approximation loop in the application orchestration layer.
+  - **Dependencies:** P28-T02.
+  - **Completion criteria:** `ApplicationService.run_simulation` branches by coupling mode and executes bounded iterative feedback in `two_way_approx` mode.
+
+- [x] **P28-T04 — Add coupling-mode controls to FastAPI GUI Conditions tab**
+  - **Purpose:** Let users choose coupling mode and provide liquid mass-flow input needed by two-way approximation.
+  - **Dependencies:** P28-T02.
+  - **Completion criteria:** `index.html` and `app.js` include coupling selector and water-mass-flow handling for save/run payloads.
+
+- [x] **P28-T05 — Add focused tests and verify regression safety**
+  - **Purpose:** Cover new coupling configuration, semantics checks, and two-way approximation execution path while preserving existing behavior.
+  - **Dependencies:** P28-T03, P28-T04.
+  - **Completion criteria:** New tests cover positive/negative coupling-mode paths and all existing tests continue to pass.
+
+---
+
+## Phase 29. Advanced Breakup Models (KH-RT Primary + Bag-Stripping Secondary)
+
+### Definition of Done
+
+Phase 29 is done when users can select `khrt` or `bag_stripping` as breakup models from YAML configuration, each backed by a physically-grounded implementation, registered in the model registry, validated by the config layer, and covered by focused unit tests.
+
+### Phase 29 Prerequisites
+
+- Phase 28 must be complete.
+- All P28 tasks must be marked complete.
+
+---
+
+- [x] **P29-T01 — Update SDD documents for advanced breakup models**
+  - **Purpose:** Document KH-RT and bag-stripping model scope, physics, and parameters in `spec.md`, `architecture.md`, and `tasks.md` before implementation.
+  - **Dependencies:** P28-T05.
+  - **Completion criteria:** `spec.md` lists new requirements; `architecture.md` §3.9 documents registered model table and boundary rules; `tasks.md` contains Phase 29.
+
+- [x] **P29-T02 — Extend domain model and config layer for new breakup parameters**
+  - [x] **P29-T02 — Extend domain model and config layer for new breakup parameters**
+  - **Purpose:** Add `khrt_B0`, `khrt_B1`, `khrt_Crt`, `liquid_density`, and `liquid_viscosity` to `ModelSelectionConfig`, config defaults, schema validation, semantic validation, and translator.
+  - **Dependencies:** P29-T01.
+  - **Completion criteria:** All five new params flow from YAML through to `ModelSelectionConfig` with validated defaults; `khrt` and `bag_stripping` accepted as breakup model names.
+
+- [x] **P29-T03 — Implement KH-RT breakup model**
+  - **Purpose:** Add `KHRTBreakupModel` in `breakup/khrt.py` using the Reitz (1987) KH curve-fit and RT stability criterion to derive child droplet diameter.
+  - **Dependencies:** P29-T02.
+  - **Completion criteria:** `KHRTBreakupModel` implements `BreakupModel`; child diameter is physically derived; model is registered as `"khrt"` in `registry.py`; `breakup/__init__.py` exports the class.
+
+- [x] **P29-T04 — Implement bag-stripping breakup model**
+  - **Purpose:** Add `BagStrippingBreakupModel` in `breakup/bag_stripping.py` computing the stable Weber-equilibrium child diameter and identifying the applicable breakup regime.
+  - **Dependencies:** P29-T02.
+  - **Completion criteria:** `BagStrippingBreakupModel` implements `BreakupModel`; child diameter is $d_s = We_{crit} \cdot \sigma / (\rho_g u_{rel}^2)$ when breakup is triggered; model is registered as `"bag_stripping"` in `registry.py`.
+
+- [x] **P29-T05 — Update diagnostics validator and add focused tests**
+  - **Purpose:** Relax the `critical_weber_number > 0` constraint in `diagnostics.py` to `>= 0` for KH-RT compatibility; add unit tests covering both new models and the updated diagnostics check.
+  - **Dependencies:** P29-T03, P29-T04.
+  - **Completion criteria:** `validate_breakup_decision` accepts `critical_weber_number >= 0`; new tests verify KH-RT and bag-stripping outputs for representative inputs; all existing tests continue to pass.
+
+  ---
+
+  ## Phase 30. Drag, Gas-Solver, and Steam-Property Accuracy Upgrades
+
+  ### Definition of Done
+
+  Phase 30 is done when the runtime supports improved droplet drag response, shock-aware gas-solver sampling refinement, and an optional IF97-backed steam provider through documented configuration and focused regression tests.
+
+  ### Phase 30 Prerequisites
+
+  - Phase 28 must be complete.
+  - Phase 29 must be complete.
+
+  ---
+
+  - [x] **P30-T01 — Update SDD documents for drag, gas, and thermo accuracy upgrades**
+    - **Purpose:** Document the approved scope for improved drag response, shock-aware gas-solver refinement, and IF97 thermo backend support before implementation.
+    - **Dependencies:** P29-T05.
+    - **Completion criteria:** `spec.md`, `architecture.md`, and `tasks.md` describe the new selectors, boundaries, and intended numerical behavior consistently.
+
+  - [x] **P30-T02 — Extend config and domain models for drag, gas-solver, and steam-backend controls**
+    - **Purpose:** Add `droplet_density`, `droplet_sphericity`, and `gas_solver_mode` to defaults, schema checks, semantic validation, and `ModelSelectionConfig`.
+    - **Dependencies:** P30-T01.
+    - **Completion criteria:** Approved values flow into the runtime model-selection layer and invalid values are rejected explicitly.
+
+  - [x] **P30-T03 — Upgrade drag-model runtime behavior**
+    - **Purpose:** Extend `StandardSphereDragModel` with broader-Re coverage and add a non-spherical drag option behind the same drag-model boundary.
+    - **Dependencies:** P30-T02.
+    - **Completion criteria:** Drag evaluation supports `standard_sphere` and `nonspherical_sphere`; droplet response uses configured density and sphericity inputs.
+
+  - [x] **P30-T04 — Add shock-aware gas-solver refinement mode**
+    - **Purpose:** Improve gas-state resolution near a fitted internal normal shock and tighten area-Mach inversion accuracy in `quasi_1d_solver.py` and `state_updates.py`.
+    - **Dependencies:** P30-T02.
+    - **Completion criteria:** `gas_solver_mode=shock_refined` inserts local sampling around the fitted shock and uses safeguarded root-finding for area-Mach inversion without breaking existing branch-selection behavior.
+
+  - [x] **P30-T05 — Add IF97-backed steam provider and backend selection**
+    - **Purpose:** Introduce an optional IF97 vapor-region provider behind the thermo interface and make thermo selection honor it.
+    - **Dependencies:** P30-T02.
+    - **Completion criteria:** `steam_property_model=if97` selects an IF97-backed provider when available; unsupported states fail explicitly through the thermo layer.
+
+  - [x] **P30-T06 — Add focused tests and verify regression safety**
+    - **Purpose:** Cover drag-correlation upgrades, gas-solver refinement behavior, and IF97 backend selection/evaluation while preserving existing runtime behavior.
+    - **Dependencies:** P30-T03, P30-T04, P30-T05.
+    - **Completion criteria:** New tests cover positive and negative paths for all three upgrades and the regression suite shows no new unrelated failures.
+
+---
+
+## Phase 31. Two-Way Coupled Source Feedback and Probabilistic Droplet State
+
+### Definition of Done
+
+Phase 31 is done when runtime supports an operator-split two-way coupled mode using liquid-to-gas source-term feedback and droplet-state probabilistic moment fields, with config-driven selection, bounded iteration controls, and focused regression coverage.
+
+### Phase 31 Prerequisites
+
+- Phase 30 must be complete.
+
+---
+
+- [x] **P31-T01 — Update SDD documents for two-way coupled source feedback and droplet distribution state**
+  - **Purpose:** Document source-term coupling loop behavior and probabilistic droplet-state scope in `spec.md`, `architecture.md`, and `tasks.md` before implementation.
+  - **Dependencies:** P30-T06.
+  - **Completion criteria:** New requirements and boundaries are described consistently across SDD documents.
+
+- [x] **P31-T02 — Extend config and domain models for coupled-loop controls and distribution parameters**
+  - **Purpose:** Add `two_way_convergence_tolerance`, `droplet_distribution_model`, and `droplet_distribution_sigma` through defaults, schema/semantic validation, translator, and typed models.
+  - **Dependencies:** P31-T01.
+  - **Completion criteria:** Parameters are available in `ModelSelectionConfig`; invalid values are rejected explicitly.
+
+- [x] **P31-T03 — Add coupling-source return API in droplet transport layer**
+  - **Purpose:** Extend `transport_solver.py` to return structured local mass/momentum/energy source summaries from droplet transport suitable for gas-side feedback.
+  - **Dependencies:** P31-T02.
+  - **Completion criteria:** `DropletSolution` carries optional coupling-source arrays with validated alignment to axial state history.
+
+- [x] **P31-T04 — Add gas-side source-term application helper**
+  - **Purpose:** Add bounded gas-state source correction logic in `quasi_1d_solver.py` for mass/momentum/energy feedback from droplet coupling sources.
+  - **Dependencies:** P31-T03.
+  - **Completion criteria:** Source-term application keeps gas-state fields finite/physical and returns a structured corrected `GasSolution`.
+
+- [x] **P31-T05 — Implement operator-split coupled iteration in application service**
+  - **Purpose:** Add `two_way_coupled` runtime mode in `app/services.py` that alternates gas solve, droplet solve, and source-term correction until tolerance or max iterations.
+  - **Dependencies:** P31-T04.
+  - **Completion criteria:** Coupled loop runs with configured bounds, emits convergence diagnostics, and preserves existing one-way/two-way-approx paths.
+
+- [x] **P31-T06 — Extend droplet state with probabilistic moment fields**
+  - **Purpose:** Add distribution-aware droplet-state fields (e.g., stddev and SMD) and update droplet updates/transport to populate them per configured distribution model.
+  - **Dependencies:** P31-T02.
+  - **Completion criteria:** Droplet state/solution carries moment values consistently across axial nodes without breaking existing mean/max workflows.
+
+- [x] **P31-T07 — Add focused tests and verify regression safety**
+  - **Purpose:** Cover coupled source-term loop, source-array API, and probabilistic droplet-state outputs while preserving legacy behavior.
+  - **Dependencies:** P31-T05, P31-T06.
+  - **Completion criteria:** New tests validate positive/negative paths for all new features and regression runs show no new unrelated failures.
+
+---
+
+## Phase 32. Validation, Sensitivity Analysis, and Optimization Workflow
+
+### Definition of Done
+
+Phase 32 is done when the validation layer supports a quantitative baseline workflow that includes objective-based validation reporting, one-at-a-time sensitivity ranking, bounded candidate optimization, and uncertainty summary metrics.
+
+### Phase 32 Prerequisites
+
+- Phase 31 must be complete.
+
+---
+
+- [x] **P32-T01 — Update SDD documents for mandatory quantitative validation workflow**
+  - **Purpose:** Add explicit requirements and ordered workflow for validation, sensitivity analysis, optimization, and uncertainty summarization.
+  - **Dependencies:** P31-T07.
+  - **Completion criteria:** `spec.md`, `architecture.md`, and `tasks.md` describe scope and boundaries consistently.
+
+- [x] **P32-T02 — Extend validation reporting API with objective metrics and campaign summary models**
+  - **Purpose:** Add structured runtime models and helpers for metric-error aggregation against documented validation references.
+  - **Dependencies:** P32-T01.
+  - **Completion criteria:** Validation module can produce baseline quantitative objective summaries from case-level metric references.
+
+- [x] **P32-T03 — Implement one-at-a-time sensitivity analysis utility**
+  - **Purpose:** Add normalized sensitivity-coefficient evaluation over bounded parameter perturbations for selected objective functions.
+  - **Dependencies:** P32-T02.
+  - **Completion criteria:** Utility returns parameter-wise ranked sensitivity results for a given objective callback.
+
+- [x] **P32-T04 — Implement bounded candidate optimization and uncertainty summary utilities**
+  - **Purpose:** Add candidate-search optimization and objective uncertainty statistics (mean/std/95% CI) in validation tooling.
+  - **Dependencies:** P32-T02.
+  - **Completion criteria:** Utilities return best candidate with score and uncertainty summary for sampled objective values.
+
+- [x] **P32-T05 — Add focused tests using existing validation-case documents**
+  - **Purpose:** Verify quantitative report assembly, sensitivity ranking behavior, optimization selection, and uncertainty calculations.
+  - **Dependencies:** P32-T03, P32-T04.
+  - **Completion criteria:** New tests pass and prove reuse of documented validation-case metrics/trends without introducing unrelated regressions.
+
+- [x] **P32-T06 — Re-update SDD check state after implementation**
+  - **Purpose:** Mark implemented requirements/tasks complete and keep SDD artifacts synchronized with code.
+  - **Dependencies:** P32-T05.
+  - **Completion criteria:** Phase 32 checkboxes are updated and trace to merged runtime changes.

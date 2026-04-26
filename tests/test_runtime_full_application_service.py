@@ -30,6 +30,9 @@ droplet_injection:
   droplet_diameter_mean_in: 0.0001
   droplet_diameter_max_in: 0.0002
 models:
+  coupling_mode: one_way
+  two_way_max_iterations: 3
+  two_way_feedback_relaxation: 0.35
   breakup_factor_mean: 0.5
   breakup_factor_max: 0.75{steam_backend}
 outputs:
@@ -79,6 +82,53 @@ class TestRuntimeFullApplicationService(unittest.TestCase):
 		self.assertEqual(run_result.status, "failed")
 		self.assertEqual(run_result.failure_stage, "startup")
 		self.assertIsNone(run_result.simulation_result)
+
+	def test_application_service_runs_two_way_approx_workflow(self) -> None:
+		service = create_application_service()
+		case_yaml = _build_case_yaml(working_fluid="air").replace(
+			"coupling_mode: one_way",
+			"coupling_mode: two_way_approx",
+		).replace(
+			"droplet_diameter_max_in: 0.0002",
+			"droplet_diameter_max_in: 0.0002\n  water_mass_flow_rate: 0.2",
+		)
+
+		with tempfile.TemporaryDirectory() as temporary_directory:
+			case_path = Path(temporary_directory) / "air_two_way_case.yaml"
+			case_path.write_text(case_yaml, encoding="utf-8")
+
+			run_result = service.run_simulation(str(case_path))
+
+		self.assertEqual(run_result.status, "completed")
+		self.assertIsNotNone(run_result.simulation_result)
+
+	def test_application_service_runs_two_way_coupled_workflow(self) -> None:
+		service = create_application_service()
+		case_yaml = _build_case_yaml(working_fluid="air").replace(
+			"coupling_mode: one_way",
+			"coupling_mode: two_way_coupled",
+		).replace(
+			"two_way_feedback_relaxation: 0.35",
+			"two_way_feedback_relaxation: 0.35\n  two_way_convergence_tolerance: 0.001\n  droplet_distribution_model: lognormal_moments\n  droplet_distribution_sigma: 0.4",
+		).replace(
+			"droplet_diameter_max_in: 0.0002",
+			"droplet_diameter_max_in: 0.0002\n  water_mass_flow_rate: 0.2",
+		)
+
+		with tempfile.TemporaryDirectory() as temporary_directory:
+			case_path = Path(temporary_directory) / "air_two_way_coupled_case.yaml"
+			case_path.write_text(case_yaml, encoding="utf-8")
+
+			run_result = service.run_simulation(str(case_path))
+
+		self.assertEqual(run_result.status, "completed")
+		self.assertIsNotNone(run_result.simulation_result)
+		self.assertTrue(
+			any(
+				"coupling_mode=two_way_coupled" in message
+				for message in run_result.simulation_result.diagnostics.messages
+			)
+		)
 
 
 if __name__ == "__main__":

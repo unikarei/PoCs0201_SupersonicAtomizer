@@ -44,6 +44,8 @@ class TestRuntimeDropletTransportSolver(unittest.TestCase):
         self.assertEqual(len(droplet_solution.states), len(gas_solution.states))
         self.assertTrue(all(abs(value) < 1.0e-10 for value in droplet_solution.slip_velocity_values))
         self.assertTrue(all(flag is False for flag in droplet_solution.breakup_flags))
+        self.assertTrue(all(value == 0.0 for value in droplet_solution.diameter_stddev_values))
+        self.assertIsNotNone(droplet_solution.coupling_source_terms)
 
     def test_solves_slip_driven_transport_case_without_breakup(self) -> None:
         geometry_model = build_geometry_model(
@@ -76,6 +78,47 @@ class TestRuntimeDropletTransportSolver(unittest.TestCase):
         self.assertGreater(droplet_solution.velocity_values[-1], droplet_solution.velocity_values[0])
         self.assertLess(abs(droplet_solution.slip_velocity_values[-1]), abs(droplet_solution.slip_velocity_values[0]))
         self.assertEqual(droplet_solution.diagnostics.status, "completed")
+
+    def test_solves_lognormal_moments_and_generates_nonzero_coupling_sources(self) -> None:
+        geometry_model = build_geometry_model(
+            GeometryConfig(
+                x_start=0.0,
+                x_end=0.1,
+                n_cells=4,
+                area_definition={
+                    "type": "table",
+                    "x": [0.0, 0.1],
+                    "A": [1.0e-4, 1.0e-4],
+                },
+            )
+        )
+        gas_solution = solve_quasi_1d_gas_flow(
+            geometry_model=geometry_model,
+            boundary_conditions=BoundaryConditionConfig(Pt_in=105000.0, Tt_in=300.0, Ps_out=100000.0),
+            thermo_provider=AirThermoProvider(),
+        )
+
+        droplet_solution = solve_droplet_transport(
+            gas_solution=gas_solution,
+            injection_config=DropletInjectionConfig(
+                droplet_velocity_in=1.0,
+                droplet_diameter_mean_in=1.0e-4,
+                droplet_diameter_max_in=2.0e-4,
+                water_mass_flow_rate=0.2,
+            ),
+            distribution_model="lognormal_moments",
+            distribution_sigma=0.4,
+        )
+
+        self.assertTrue(all(value is not None and value > 0.0 for value in droplet_solution.smd_diameter_values))
+        self.assertTrue(any(value > 0.0 for value in droplet_solution.diameter_stddev_values))
+        self.assertIsNotNone(droplet_solution.coupling_source_terms)
+        self.assertTrue(
+            any(
+                abs(value) > 0.0
+                for value in droplet_solution.coupling_source_terms.momentum_source_values
+            )
+        )
 
 
 if __name__ == "__main__":

@@ -100,6 +100,52 @@ class TestSemanticConfigValidationRuntime(unittest.TestCase):
         with self.assertRaises(ValueError):
             validate_semantic_config(raw_config)
 
+    def test_accepts_two_way_approx_with_water_mass_flow_rate(self) -> None:
+        raw_config = _make_valid_config()
+        raw_config["models"]["coupling_mode"] = "two_way_approx"
+        raw_config["droplet_injection"]["water_mass_flow_rate"] = 0.05
+
+        validated = validate_semantic_config(raw_config)
+
+        self.assertIs(validated, raw_config)
+
+    def test_rejects_two_way_approx_without_water_mass_flow_rate(self) -> None:
+        raw_config = _make_valid_config()
+        raw_config["models"]["coupling_mode"] = "two_way_approx"
+
+        with self.assertRaises(ValueError):
+            validate_semantic_config(raw_config)
+
+    def test_accepts_two_way_coupled_with_water_mass_flow_rate(self) -> None:
+        raw_config = _make_valid_config()
+        raw_config["models"]["coupling_mode"] = "two_way_coupled"
+        raw_config["droplet_injection"]["water_mass_flow_rate"] = 0.05
+
+        validated = validate_semantic_config(raw_config)
+
+        self.assertIs(validated, raw_config)
+
+    def test_rejects_two_way_coupled_without_water_mass_flow_rate(self) -> None:
+        raw_config = _make_valid_config()
+        raw_config["models"]["coupling_mode"] = "two_way_coupled"
+
+        with self.assertRaises(ValueError):
+            validate_semantic_config(raw_config)
+
+    def test_rejects_invalid_distribution_model(self) -> None:
+        raw_config = _make_valid_config()
+        raw_config["models"]["droplet_distribution_model"] = "bimodal"
+
+        with self.assertRaises(ValueError):
+            validate_semantic_config(raw_config)
+
+    def test_rejects_unknown_coupling_mode(self) -> None:
+        raw_config = _make_valid_config()
+        raw_config["models"]["coupling_mode"] = "two_way_exact"
+
+        with self.assertRaises(ValueError):
+            validate_semantic_config(raw_config)
+
 
 if __name__ == "__main__":
     unittest.main()

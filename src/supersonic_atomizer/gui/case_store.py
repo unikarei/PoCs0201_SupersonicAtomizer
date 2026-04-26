@@ -68,6 +68,7 @@ _DEFAULT_TEMPLATE: dict[str, Any] = {
         "critical_weber_number": 12.0,
         "breakup_factor_mean": 0.5,
         "breakup_factor_max": 0.5,
+        "coupling_mode": "one_way",
     },
     "outputs": {
         "output_directory": "outputs",

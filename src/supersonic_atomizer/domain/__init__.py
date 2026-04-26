@@ -11,6 +11,7 @@ from .case_models import (
 )
 from .state_models import (
 	BreakupDecision,
+	CouplingSourceTerms,
 	DropletSolution,
 	DropletState,
 	GasSolution,
@@ -28,6 +29,7 @@ __all__ = [
 	"BoundaryConditionConfig",
 	"BreakupDecision",
 	"CaseConfig",
+	"CouplingSourceTerms",
 	"DropletSolution",
 	"DropletInjectionConfig",
 	"DropletState",

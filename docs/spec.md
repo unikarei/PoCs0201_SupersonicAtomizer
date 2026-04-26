@@ -130,6 +130,11 @@ These items may be considered in later releases only after the MVP is validated.
 - [x] The simulator shall support a fluid property abstraction that allows air and steam implementations.
 - [x] The steam implementation shall be designed to support IF97-based properties.
 - [x] The first release shall assume equilibrium steam behavior.
+- [x] The simulator shall support a shock-aware quasi-1D sampling refinement mode for supported internal-normal-shock Laval-nozzle solutions.
+- [x] The simulator shall use a higher-accuracy safeguarded inversion of the area-Mach relation near $M=1$ and at high area ratios.
+- [x] The simulator shall support explicit selection of an IF97 steam backend when the corresponding provider dependency is available.
+- [x] The simulator shall support an operator-split two-way coupled mode that applies liquid-to-gas mass/momentum/energy source terms iteratively.
+- [x] The simulator shall expose bounded convergence control for the two-way coupled loop and report coupling iteration diagnostics.
 
 ### 5.3 Droplet Simulation
 
@@ -140,6 +145,18 @@ These items may be considered in later releases only after the MVP is validated.
 - [x] The simulator shall compute droplet Weber number along $x$.
 - [x] The simulator shall apply a simple breakup criterion when Weber number exceeds a defined threshold.
 - [x] The simulator shall update droplet diameter metrics after breakup events according to the selected MVP breakup rule.
+- [x] The simulator shall support configuration-driven coupling-mode selection between `one_way` (legacy MVP) and `two_way_approx` (reduced-order iterative feedback).
+- [x] The simulator shall support selection of the KH-RT (Kelvin-Helmholtz / Rayleigh-Taylor) primary breakup model as an alternative to the Weber-threshold model.
+- [x] The simulator shall support selection of the bag-stripping regime model as an alternative secondary breakup model.
+- [x] When the KH-RT model is selected, child droplet diameter shall be derived from KH wavelength and RT stability criteria using liquid droplet properties.
+- [x] When the bag-stripping model is selected, child diameter shall be computed as the stable Weber-number equilibrium diameter.
+- [x] The simulator shall support a high-accuracy spherical drag correlation with low-, intermediate-, and high-Reynolds-number coverage.
+- [x] The simulator shall support a non-spherical drag response option using user-configured droplet sphericity.
+- [x] The simulator shall carry thermo-provider gas dynamic viscosity into droplet Reynolds-number and drag-response updates when available.
+- [x] When the bag-stripping model is selected, child diameter shall be computed as the stable Weber-number equilibrium diameter.
+- [x] The simulator shall expose local droplet-to-gas coupling source terms from the droplet transport layer for use by the gas solver.
+- [x] The simulator shall support a probabilistic droplet-size state extension with at least standard deviation and Sauter mean diameter (SMD) in addition to mean/max diameters.
+- [x] The simulator shall support configuration-driven selection between monodisperse and lognormal-moment droplet distribution representations.
 
 ### 5.4 Outputs
 
@@ -218,6 +235,20 @@ These items may be considered in later releases only after the MVP is validated.
 | `breakup_factor_max` | Maximum diameter reduction factor | - | Model parameter |
 | `drag_model` | Droplet drag model selector | - | MVP default shall be simple spherical drag |
 | `steam_property_model` | Steam property backend | - | Designed for IF97 |
+| `coupling_mode` | Gas-droplet coupling mode selector | - | `one_way` or `two_way_approx` |
+| `two_way_max_iterations` | Max outer iterations for reduced-order two-way mode | - | Positive integer |
+| `two_way_feedback_relaxation` | Feedback relaxation coefficient for reduced-order two-way mode | - | Positive scalar |
+| `two_way_convergence_tolerance` | Convergence tolerance for coupled iteration loop | - | Positive scalar |
+| `droplet_density` | Representative droplet material density | kg/m³ | Default water-like value |
+| `droplet_sphericity` | Non-spherical drag correction input | - | 1.0 = sphere; required for non-spherical drag option |
+| `gas_solver_mode` | Quasi-1D gas solver mode selector | - | `baseline` or `shock_refined` |
+| `droplet_distribution_model` | Droplet-size distribution state selector | - | `mono` or `lognormal_moments` |
+| `droplet_distribution_sigma` | Lognormal spread parameter for droplet-size moments | - | Positive scalar, used when `lognormal_moments` |
+| `khrt_B0` | KH child-radius proportionality constant | - | Default 0.61 (Beale & Reitz 1999) |
+| `khrt_B1` | KH breakup time constant | - | Default 40.0 (dimensionless, range 10–60) |
+| `khrt_Crt` | RT instability constant | - | Default 0.1 (range 0.1–0.5) |
+| `liquid_density` | Representative droplet liquid density | kg/m³ | Default 998.2 (water at ~20 °C) |
+| `liquid_viscosity` | Representative droplet liquid dynamic viscosity | Pa·s | Default 1.002 × 10⁻³ (water at ~20 °C) |
 
 ### 7.3 Input Format Requirements
 
@@ -302,6 +333,7 @@ For steam:
 - Steam support shall be designed around IF97-based property handling.
 - The first release shall assume equilibrium steam.
 - The first release may limit steam calculations to the subset of states and property calls required by the approved MVP cases.
+- An optional IF97 backend may be used for vapor-region states when the dependency is installed and the requested case remains within the supported pressure-temperature envelope.
 
 ### 9.3 Droplet Assumptions
 
@@ -313,9 +345,12 @@ For steam:
 
 ### 9.4 Breakup Assumptions
 
-- Breakup is represented by a simple threshold model based on Weber number.
-- When $We > We_{crit}$, droplet diameter metrics are reduced by a prescribed rule.
-- The MVP does not attempt to resolve breakup mode maps, fragment distributions, or breakup time-scale physics in detail.
+- Breakup is represented by a pluggable, configuration-driven model.
+- The default model uses a Weber-number threshold: when $We > We_{crit}$, droplet diameter metrics are reduced by a prescribed factor.
+- The KH-RT model derives child droplet diameter from Kelvin-Helmholtz surface stripping and Rayleigh-Taylor bulk breakup wavelengths using the Reitz (1987) curve-fit. Child diameter is taken as the minimum of the KH and RT equilibrium sizes when each applies.
+- The bag-stripping model computes the stable Weber-equilibrium child diameter: $d_s = We_{crit} \cdot \sigma / (\rho_g \cdot u_{rel}^2)$, where $u_{rel}$ is the local slip velocity. This targets the diameter at which breakup would just cease.
+- All breakup models share the same stateless, cell-local interface and return a structured `BreakupDecision`.
+- Breakup time-scale physics and deformation history are not tracked in the quasi-1D MVP framework.
 
 ### 9.5 Excluded Physics Assumptions
 
@@ -352,6 +387,19 @@ The MVP should prefer:
 - transparent model equations,
 - reproducible outputs.
 
+Approved post-MVP refinements may include:
+
+- shock-aware local axial refinement around a fitted internal normal shock,
+- safeguarded Newton-bisection area-Mach inversion,
+- improved drag correlations with non-spherical corrections,
+- more precise steam property backends behind the thermo abstraction.
+
+For coupled gas-droplet source-term iterations:
+
+- the loop shall remain bounded by configured max-iteration and convergence-tolerance guards,
+- source-term corrections shall be relaxation-controlled to avoid nonphysical gas-state updates,
+- diagnostics shall indicate when the coupled loop converged or terminated by iteration cap.
+
 ---
 
 ## 11. Validation Requirements
@@ -385,6 +433,23 @@ The project should eventually include:
 - expected trend descriptions,
 - tolerances for regression testing,
 - notes on limits of agreement for simplified models.
+
+### 11.5 Quantitative Validation and Sensitivity (Mandatory)
+
+- [x] The simulator shall support a quantitative validation-campaign report that compares selected output metrics against reference targets from documented validation cases.
+- [x] The simulator shall support one-at-a-time sensitivity analysis for selected model parameters and report normalized sensitivity coefficients.
+- [x] The simulator shall support bounded parameter optimization over user-provided candidate sets and report the best objective score with associated parameters.
+- [x] The simulator shall support uncertainty summary statistics (mean, standard deviation, 95% confidence interval) for objective values derived from validation samples.
+
+### 11.6 Recommended Execution Order
+
+The recommended workflow for validation-driven improvement shall be:
+
+1. execute baseline validation campaign on documented cases,
+2. run sensitivity analysis to rank high-impact parameters,
+3. run bounded optimization on top-ranked parameters,
+4. run uncertainty aggregation for the optimized candidate,
+5. compare baseline vs optimized objective and record findings.
 
 ---
 

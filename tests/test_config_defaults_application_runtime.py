@@ -33,6 +33,12 @@ class TestConfigDefaultsApplicationRuntime(unittest.TestCase):
 
         self.assertEqual(normalized["models"]["drag_model"], "standard_sphere")
         self.assertEqual(normalized["models"]["breakup_model"], "weber_critical")
+        self.assertEqual(normalized["models"]["coupling_mode"], "one_way")
+        self.assertEqual(normalized["models"]["two_way_max_iterations"], 3)
+        self.assertEqual(normalized["models"]["two_way_feedback_relaxation"], 0.35)
+        self.assertEqual(normalized["models"]["two_way_convergence_tolerance"], 1.0e-3)
+        self.assertEqual(normalized["models"]["droplet_distribution_model"], "mono")
+        self.assertEqual(normalized["models"]["droplet_distribution_sigma"], 0.35)
         self.assertEqual(normalized["models"]["critical_weber_number"], 12.0)
         self.assertTrue(normalized["outputs"]["write_csv"])
         self.assertTrue(normalized["outputs"]["write_json"])
@@ -46,6 +52,12 @@ class TestConfigDefaultsApplicationRuntime(unittest.TestCase):
             "models": {
                 "drag_model": "custom_drag",
                 "breakup_model": "custom_breakup",
+                "coupling_mode": "two_way_approx",
+                "two_way_max_iterations": 5,
+                "two_way_feedback_relaxation": 0.2,
+                "two_way_convergence_tolerance": 2.0e-3,
+                "droplet_distribution_model": "lognormal_moments",
+                "droplet_distribution_sigma": 0.4,
                 "critical_weber_number": 18.5,
             },
             "outputs": {
@@ -61,6 +73,12 @@ class TestConfigDefaultsApplicationRuntime(unittest.TestCase):
         self.assertEqual(normalized["fluid"]["inlet_wetness"], 0.05)
         self.assertEqual(normalized["models"]["drag_model"], "custom_drag")
         self.assertEqual(normalized["models"]["breakup_model"], "custom_breakup")
+        self.assertEqual(normalized["models"]["coupling_mode"], "two_way_approx")
+        self.assertEqual(normalized["models"]["two_way_max_iterations"], 5)
+        self.assertEqual(normalized["models"]["two_way_feedback_relaxation"], 0.2)
+        self.assertEqual(normalized["models"]["two_way_convergence_tolerance"], 2.0e-3)
+        self.assertEqual(normalized["models"]["droplet_distribution_model"], "lognormal_moments")
+        self.assertEqual(normalized["models"]["droplet_distribution_sigma"], 0.4)
         self.assertEqual(normalized["models"]["critical_weber_number"], 18.5)
         self.assertFalse(normalized["outputs"]["write_csv"])
         self.assertFalse(normalized["outputs"]["write_json"])

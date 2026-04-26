@@ -47,7 +47,8 @@ _SKELETON: dict[str, Any] = {
         "critical_weber_number": 12.0,
         "breakup_factor_mean": 0.5,
         "breakup_factor_max": 0.5,
-        "drag_model": "sphere",
+        "drag_model": "standard_sphere",
+        "coupling_mode": "one_way",
     },
     "outputs": {
         "output_dir": "outputs",

@@ -71,6 +71,7 @@ SWEEP_FIELD_SPECS: tuple[SweepFieldSpec, ...] = (
     SweepFieldSpec(("droplet_injection",), "droplet_velocity_in", "droplet_velocity_in"),
     SweepFieldSpec(("droplet_injection",), "droplet_diameter_mean_in", "droplet_diameter_mean_in"),
     SweepFieldSpec(("droplet_injection",), "droplet_diameter_max_in", "droplet_diameter_max_in"),
+    SweepFieldSpec(("droplet_injection",), "water_mass_flow_rate", "water_mass_flow_rate", optional=True),
     SweepFieldSpec(("models", "model_selection"), "critical_weber_number", "critical_weber_number"),
     SweepFieldSpec(("models", "model_selection"), "breakup_factor_mean", "breakup_factor_mean"),
     SweepFieldSpec(("models", "model_selection"), "breakup_factor_max", "breakup_factor_max"),

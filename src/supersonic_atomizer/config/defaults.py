@@ -42,11 +42,25 @@ def apply_config_defaults(raw_config: dict[str, Any]) -> dict[str, Any]:
     fluid_section.setdefault("inlet_wetness", None)
 
     models_section.setdefault("drag_model", "standard_sphere")
+    models_section.setdefault("droplet_density", 998.2)
+    models_section.setdefault("droplet_sphericity", 1.0)
     models_section.setdefault("breakup_model", "weber_critical")
+    models_section.setdefault("gas_solver_mode", "baseline")
+    models_section.setdefault("coupling_mode", "one_way")
+    models_section.setdefault("two_way_max_iterations", 3)
+    models_section.setdefault("two_way_feedback_relaxation", 0.35)
+    models_section.setdefault("two_way_convergence_tolerance", 1.0e-3)
+    models_section.setdefault("droplet_distribution_model", "mono")
+    models_section.setdefault("droplet_distribution_sigma", 0.35)
     models_section.setdefault(
         "critical_weber_number",
         DEFAULT_CRITICAL_WEBER_NUMBER,
     )
+    models_section.setdefault("khrt_B0", 0.61)
+    models_section.setdefault("khrt_B1", 40.0)
+    models_section.setdefault("khrt_Crt", 0.1)
+    models_section.setdefault("liquid_density", 998.2)
+    models_section.setdefault("liquid_viscosity", 1.002e-3)
 
     outputs_section.setdefault("write_csv", True)
     outputs_section.setdefault("write_json", True)

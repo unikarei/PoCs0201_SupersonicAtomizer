@@ -60,11 +60,25 @@ def _translate_model_selection(raw_config: dict[str, Any]) -> ModelSelectionConf
     models_section = raw_config.get("models", {})
     return ModelSelectionConfig(
         drag_model=models_section.get("drag_model", "standard_sphere"),
+        droplet_density=models_section.get("droplet_density", 998.2),
+        droplet_sphericity=models_section.get("droplet_sphericity", 1.0),
         breakup_model=models_section.get("breakup_model", "weber_critical"),
         critical_weber_number=models_section.get("critical_weber_number", 12.0),
         breakup_factor_mean=models_section.get("breakup_factor_mean"),
         breakup_factor_max=models_section.get("breakup_factor_max"),
         steam_property_model=models_section.get("steam_property_model"),
+        gas_solver_mode=models_section.get("gas_solver_mode", "baseline"),
+        coupling_mode=models_section.get("coupling_mode", "one_way"),
+        two_way_max_iterations=models_section.get("two_way_max_iterations", 3),
+        two_way_feedback_relaxation=models_section.get("two_way_feedback_relaxation", 0.35),
+        two_way_convergence_tolerance=models_section.get("two_way_convergence_tolerance", 1.0e-3),
+        droplet_distribution_model=models_section.get("droplet_distribution_model", "mono"),
+        droplet_distribution_sigma=models_section.get("droplet_distribution_sigma", 0.35),
+        khrt_B0=models_section.get("khrt_B0", 0.61),
+        khrt_B1=models_section.get("khrt_B1", 40.0),
+        khrt_Crt=models_section.get("khrt_Crt", 0.1),
+        liquid_density=models_section.get("liquid_density", 998.2),
+        liquid_viscosity=models_section.get("liquid_viscosity", 1.002e-3),
     )
 
 

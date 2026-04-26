@@ -13,9 +13,10 @@ def validate_breakup_decision(decision: BreakupDecision) -> None:
 
     if not math.isfinite(decision.weber_number) or decision.weber_number < 0.0:
         raise NumericalError("Breakup decision checks failed: Weber number must be finite and nonnegative.")
-    if not math.isfinite(decision.critical_weber_number) or decision.critical_weber_number <= 0.0:
+    if not math.isfinite(decision.critical_weber_number) or decision.critical_weber_number < 0.0:
         raise NumericalError(
-            "Breakup decision checks failed: critical Weber number must be finite and positive."
+            "Breakup decision checks failed: critical Weber number must be finite and nonnegative "
+            "(use 0.0 for physics-based models that have no scalar threshold)."
         )
     if (
         not math.isfinite(decision.updated_mean_diameter)

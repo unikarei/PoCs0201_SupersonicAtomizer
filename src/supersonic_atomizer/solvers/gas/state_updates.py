@@ -34,6 +34,70 @@ def compute_area_mach_relation(mach_number: float, heat_capacity_ratio: float) -
     return (1.0 / mach_number) * ratio_term**exponent
 
 
+def _compute_area_mach_residual(
+    mach_number: float,
+    heat_capacity_ratio: float,
+    area_ratio: float,
+) -> float:
+    return compute_area_mach_relation(mach_number, heat_capacity_ratio) - area_ratio
+
+
+def _compute_area_mach_derivative(mach_number: float, heat_capacity_ratio: float) -> float:
+    perturbation = max(1.0e-7, abs(mach_number) * 1.0e-6)
+    lower = max(1.0e-8, mach_number - perturbation)
+    upper = mach_number + perturbation
+    return (
+        compute_area_mach_relation(upper, heat_capacity_ratio)
+        - compute_area_mach_relation(lower, heat_capacity_ratio)
+    ) / (upper - lower)
+
+
+def _solve_monotonic_mach_from_area_ratio(
+    *,
+    area_ratio: float,
+    heat_capacity_ratio: float,
+    lower: float,
+    upper: float,
+    tolerance: float,
+    max_iterations: int,
+    branch: str,
+) -> float:
+    candidate = 0.5 * (lower + upper)
+    for _ in range(max_iterations):
+        residual = _compute_area_mach_residual(candidate, heat_capacity_ratio, area_ratio)
+        if abs(residual) <= tolerance:
+            return candidate
+
+        derivative = _compute_area_mach_derivative(candidate, heat_capacity_ratio)
+        if derivative != 0.0 and math.isfinite(derivative):
+            proposed = candidate - residual / derivative
+            if lower < proposed < upper and math.isfinite(proposed):
+                candidate = proposed
+            else:
+                candidate = 0.5 * (lower + upper)
+        else:
+            candidate = 0.5 * (lower + upper)
+
+        candidate_ratio = compute_area_mach_relation(candidate, heat_capacity_ratio)
+        if abs(candidate_ratio - area_ratio) <= tolerance:
+            return candidate
+
+        if branch == "subsonic":
+            if candidate_ratio > area_ratio:
+                lower = candidate
+            else:
+                upper = candidate
+        else:
+            if candidate_ratio < area_ratio:
+                lower = candidate
+            else:
+                upper = candidate
+
+        candidate = 0.5 * (lower + upper)
+
+    return 0.5 * (lower + upper)
+
+
 def solve_subsonic_mach_from_area_ratio(
     area_ratio: float,
     heat_capacity_ratio: float,
@@ -48,19 +112,15 @@ def solve_subsonic_mach_from_area_ratio(
             f"Subsonic area-ratio inversion requires area_ratio > 1.0, got {area_ratio}."
         )
 
-    lower = 1.0e-8
-    upper = 1.0 - 1.0e-8
-    for _ in range(max_iterations):
-        midpoint = 0.5 * (lower + upper)
-        midpoint_ratio = compute_area_mach_relation(midpoint, heat_capacity_ratio)
-        if abs(midpoint_ratio - area_ratio) <= tolerance:
-            return midpoint
-        if midpoint_ratio > area_ratio:
-            lower = midpoint
-        else:
-            upper = midpoint
-
-    return 0.5 * (lower + upper)
+    return _solve_monotonic_mach_from_area_ratio(
+        area_ratio=area_ratio,
+        heat_capacity_ratio=heat_capacity_ratio,
+        lower=1.0e-8,
+        upper=1.0 - 1.0e-8,
+        tolerance=tolerance,
+        max_iterations=max_iterations,
+        branch="subsonic",
+    )
 
 
 def solve_supersonic_mach_from_area_ratio(
@@ -87,17 +147,15 @@ def solve_supersonic_mach_from_area_ratio(
             "Supersonic area-ratio inversion upper bound is too small for the requested area ratio."
         )
 
-    for _ in range(max_iterations):
-        midpoint = 0.5 * (lower + upper)
-        midpoint_ratio = compute_area_mach_relation(midpoint, heat_capacity_ratio)
-        if abs(midpoint_ratio - area_ratio) <= tolerance:
-            return midpoint
-        if midpoint_ratio < area_ratio:
-            lower = midpoint
-        else:
-            upper = midpoint
-
-    return 0.5 * (lower + upper)
+    return _solve_monotonic_mach_from_area_ratio(
+        area_ratio=area_ratio,
+        heat_capacity_ratio=heat_capacity_ratio,
+        lower=lower,
+        upper=upper,
+        tolerance=tolerance,
+        max_iterations=max_iterations,
+        branch="supersonic",
+    )
 
 
 def compute_critical_pressure_ratio(heat_capacity_ratio: float) -> float:
@@ -278,6 +336,7 @@ def assemble_gas_state_from_total_conditions(
             density=thermo_state.density,
             enthalpy=thermo_state.enthalpy,
             sound_speed=thermo_state.sound_speed,
+            dynamic_viscosity=thermo_state.dynamic_viscosity,
         ),
     )
 

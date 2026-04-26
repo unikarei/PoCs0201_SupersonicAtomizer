@@ -43,6 +43,13 @@ def _build_settings_summary(case_config: CaseConfig) -> dict[str, object]:
 		"models": {
 			"drag_model": case_config.models.drag_model,
 			"breakup_model": case_config.models.breakup_model,
+			"gas_solver_mode": case_config.models.gas_solver_mode,
+			"coupling_mode": case_config.models.coupling_mode,
+			"two_way_max_iterations": case_config.models.two_way_max_iterations,
+			"two_way_feedback_relaxation": case_config.models.two_way_feedback_relaxation,
+			"two_way_convergence_tolerance": case_config.models.two_way_convergence_tolerance,
+			"droplet_distribution_model": case_config.models.droplet_distribution_model,
+			"droplet_distribution_sigma": case_config.models.droplet_distribution_sigma,
 			"critical_weber_number": case_config.models.critical_weber_number,
 			"breakup_factor_mean": case_config.models.breakup_factor_mean,
 			"breakup_factor_max": case_config.models.breakup_factor_max,

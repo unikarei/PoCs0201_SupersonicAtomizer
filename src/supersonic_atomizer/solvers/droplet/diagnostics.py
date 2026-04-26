@@ -67,6 +67,18 @@ def validate_droplet_state(droplet_state: DropletState) -> None:
         raise NumericalError(
             "Droplet derived-quantity checks failed: Reynolds number must be finite and nonnegative when present."
         )
+    if (
+        droplet_state.smd_diameter is not None
+        and (not math.isfinite(droplet_state.smd_diameter) or droplet_state.smd_diameter <= 0.0)
+    ):
+        raise NumericalError("Droplet distribution checks failed: SMD must be finite and positive when present.")
+    if (
+        droplet_state.diameter_stddev is not None
+        and (not math.isfinite(droplet_state.diameter_stddev) or droplet_state.diameter_stddev < 0.0)
+    ):
+        raise NumericalError(
+            "Droplet distribution checks failed: diameter standard deviation must be finite and nonnegative when present."
+        )
 
 
 def raise_droplet_solver_failure(

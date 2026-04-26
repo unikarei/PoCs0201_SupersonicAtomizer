@@ -10,10 +10,11 @@ boundary_conditions:
   - 226105.55
   - 49704.25
   - 33136.15
+  - 25000
 geometry:
   x_start: 0
   x_end: 0.5
-  n_cells: 300
+  n_cells: 100
   area_distribution:
     type: table
     x:
@@ -39,7 +40,7 @@ model_selection:
   critical_weber_number: 12
   breakup_factor_mean: 0.5
   breakup_factor_max: 0.5
-  drag_model: sphere
+  drag_model: standard_sphere
 outputs:
   output_dir: outputs
   write_csv: true

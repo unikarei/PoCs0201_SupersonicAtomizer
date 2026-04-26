@@ -6,6 +6,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from supersonic_atomizer.domain import (
 	BreakupDecision,
+	CouplingSourceTerms,
 	DropletSolution,
 	DropletState,
 	GasSolution,
@@ -63,6 +64,13 @@ class TestRuntimeSolverStateModels(unittest.TestCase):
 			weber_number_values=(12.0,),
 			reynolds_number_values=(250.0,),
 			breakup_flags=(False,),
+			smd_diameter_values=(1.1e-4,),
+			diameter_stddev_values=(1.0e-5,),
+			coupling_source_terms=CouplingSourceTerms(
+				mass_source_values=(0.0,),
+				momentum_source_values=(0.0,),
+				energy_source_values=(0.0,),
+			),
 		)
 		breakup_decision = BreakupDecision(
 			triggered=True,
@@ -76,6 +84,7 @@ class TestRuntimeSolverStateModels(unittest.TestCase):
 		self.assertEqual(gas_state.thermo_state.sound_speed, 420.0)
 		self.assertEqual(gas_solution.velocity_values[0], 250.0)
 		self.assertEqual(droplet_solution.breakup_flags[0], False)
+		self.assertEqual(droplet_solution.smd_diameter_values[0], 1.1e-4)
 		self.assertTrue(breakup_decision.triggered)
 
 	def test_gas_solution_rejects_mismatched_array_lengths(self) -> None:
@@ -130,6 +139,30 @@ class TestRuntimeSolverStateModels(unittest.TestCase):
 				weber_number_values=(12.0, 13.0),
 				reynolds_number_values=(None,),
 				breakup_flags=(False,),
+			)
+
+	def test_droplet_solution_rejects_misaligned_optional_moment_lengths(self) -> None:
+		droplet_state = DropletState(
+			x=0.0,
+			velocity=10.0,
+			slip_velocity=240.0,
+			mean_diameter=1.0e-4,
+			maximum_diameter=3.0e-4,
+			weber_number=12.0,
+		)
+
+		with self.assertRaises(ValueError):
+			DropletSolution(
+				states=(droplet_state,),
+				x_values=(0.0,),
+				velocity_values=(10.0,),
+				slip_velocity_values=(240.0,),
+				mean_diameter_values=(1.0e-4,),
+				maximum_diameter_values=(3.0e-4,),
+				weber_number_values=(12.0,),
+				reynolds_number_values=(None,),
+				breakup_flags=(False,),
+				smd_diameter_values=(1.0e-4, 1.1e-4),
 			)
 
 

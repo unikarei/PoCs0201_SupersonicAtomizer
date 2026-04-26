@@ -20,6 +20,15 @@ def _validate_solution_lengths(expected_length: int, lengths: dict[str, int]) ->
 			)
 
 
+def _validate_optional_length(expected_length: int, field_name: str, field_values: tuple[object, ...]) -> None:
+	"""Validate optional solution arrays when provided."""
+
+	if field_values and len(field_values) != expected_length:
+		raise ValueError(
+			f"Field '{field_name}' must have length {expected_length} when supplied, got {len(field_values)}."
+		)
+
+
 @dataclass(frozen=True, slots=True)
 class ThermoState:
 	"""Thermodynamic state at one evaluation point."""
@@ -29,6 +38,7 @@ class ThermoState:
 	density: float
 	enthalpy: float
 	sound_speed: float
+	dynamic_viscosity: float | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,8 +95,29 @@ class DropletState:
 	mean_diameter: float
 	maximum_diameter: float
 	weber_number: float
+	smd_diameter: float | None = None
+	diameter_stddev: float | None = None
 	reynolds_number: float | None = None
 	breakup_triggered: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class CouplingSourceTerms:
+	"""Local liquid-to-gas source terms aligned to droplet axial states."""
+
+	mass_source_values: tuple[float, ...]
+	momentum_source_values: tuple[float, ...]
+	energy_source_values: tuple[float, ...]
+
+	def __post_init__(self) -> None:
+		expected_length = len(self.mass_source_values)
+		_validate_solution_lengths(
+			expected_length,
+			{
+				"momentum_source_values": len(self.momentum_source_values),
+				"energy_source_values": len(self.energy_source_values),
+			},
+		)
 
 
 @dataclass(frozen=True, slots=True)
@@ -102,6 +133,9 @@ class DropletSolution:
 	weber_number_values: tuple[float, ...]
 	reynolds_number_values: tuple[float | None, ...]
 	breakup_flags: tuple[bool, ...]
+	smd_diameter_values: tuple[float | None, ...] = ()
+	diameter_stddev_values: tuple[float | None, ...] = ()
+	coupling_source_terms: CouplingSourceTerms | None = None
 	diagnostics: Any = None
 
 	def __post_init__(self) -> None:
@@ -119,6 +153,12 @@ class DropletSolution:
 				"breakup_flags": len(self.breakup_flags),
 			},
 		)
+		_validate_optional_length(expected_length, "smd_diameter_values", self.smd_diameter_values)
+		_validate_optional_length(expected_length, "diameter_stddev_values", self.diameter_stddev_values)
+		if self.coupling_source_terms is not None and len(self.coupling_source_terms.mass_source_values) != expected_length:
+			raise ValueError(
+				"Field 'coupling_source_terms' must align with droplet state history length."
+			)
 
 
 @dataclass(frozen=True, slots=True)

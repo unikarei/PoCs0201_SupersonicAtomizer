@@ -9,6 +9,12 @@ from supersonic_atomizer.domain import ThermoState
 from supersonic_atomizer.thermo.interfaces import ThermoProvider, ThermoProviderMetadata
 
 
+def _approximate_steam_viscosity(temperature: float) -> float:
+    reference_temperature = 373.15
+    reference_viscosity = 1.3e-5
+    return reference_viscosity * (temperature / reference_temperature) ** 0.7
+
+
 @dataclass(frozen=True, slots=True)
 class SteamThermoProvider(ThermoProvider):
     """Restricted equilibrium-steam provider using an idealized vapor approximation."""
@@ -72,4 +78,5 @@ class SteamThermoProvider(ThermoProvider):
             density=density,
             enthalpy=enthalpy,
             sound_speed=sound_speed,
+            dynamic_viscosity=_approximate_steam_viscosity(temperature),
         )

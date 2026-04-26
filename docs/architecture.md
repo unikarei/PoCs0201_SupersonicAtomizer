@@ -133,6 +133,8 @@ Responsibilities:
 
 The steam implementation shall be swappable so IF97 support can be introduced or replaced cleanly.
 
+The thermo selection boundary shall allow multiple named steam providers, including the existing equilibrium approximation and an optional IF97-backed vapor-region provider.
+
 ### 3.5 Geometry Layer
 
 Responsibilities:
@@ -157,6 +159,9 @@ Responsibilities:
 - solve steady quasi-1D gas flow along the axial grid,
 - compute gas pressure, temperature, density, velocity, and Mach number,
 - select the appropriate internal branch for supported converging-diverging Laval nozzles (subsonic, choked/supersonic, or one internal normal-shock-fitted branch),
+- support shock-aware local sampling refinement around a fitted internal normal shock without changing the user-configured base grid,
+- use safeguarded root-finding for area-Mach inversion near singular regions,
+- support optional liquid-to-gas coupling source-term application (mass/momentum/energy) on assembled gas states,
 - use thermo-provider interfaces rather than direct property formulas where possible,
 - surface numerical diagnostics and failure conditions.
 
@@ -167,19 +172,44 @@ Responsibilities:
 - initialize droplet state from case inputs,
 - compute slip velocity relative to gas,
 - compute drag-driven droplet acceleration,
+- select and evaluate a configured drag correlation,
+- support non-spherical drag correction parameters through the drag-model boundary,
 - update droplet velocity and size metrics along the grid,
+- expose local coupling-source summaries required by two-way gas feedback,
+- maintain optional probabilistic droplet-size moments (e.g., diameter standard deviation and SMD),
 - request breakup decisions from the breakup module.
+
+Drag models shall remain isolated in `solvers/droplet/drag_models.py` and must not embed breakup logic or read raw configuration.
+
+Coupling-source extraction shall remain isolated in `solvers/droplet/transport_solver.py` and must not directly mutate gas-side state.
 
 ### 3.9 Breakup Model Layer
 
 Responsibilities:
 
-- define the breakup interface,
-- compute Weber-based breakup criteria,
-- return updated droplet metrics and breakup indicators,
-- allow later replacement by alternative models.
+- define the breakup interface (`BreakupModel` / `BreakupModelInputs`),
+- implement concrete breakup models behind that interface,
+- return structured `BreakupDecision` objects with updated diameter metrics and diagnostics,
+- keep model selection configuration-driven via the registry,
+- allow later replacement or addition of models without touching the solver core.
 
 This layer shall remain fully pluggable.
+
+#### Registered breakup models
+
+| Config name | Module | Physics basis |
+|---|---|---|
+| `weber_critical` | `breakup/weber_critical.py` | Weber-number threshold + prescribed reduction factors (MVP default) |
+| `khrt` | `breakup/khrt.py` | KH instability (Reitz 1987 curve-fit) + RT bulk breakup; child diameter from wavelength physics |
+| `bag_stripping` | `breakup/bag_stripping.py` | Stable Weber equilibrium diameter; child = $We_{crit} \cdot \sigma / (\rho_g u_{rel}^2)$ |
+
+#### Model boundary rules
+
+- Breakup models must not read YAML directly.
+- Breakup models must not call the gas or droplet solver.
+- All liquid property assumptions (density, viscosity, surface tension) used by breakup models must come from model parameters, not be hard-wired silently.
+- Weber number must be computed and stored in every `BreakupDecision` regardless of model.
+- The `diagnostics` validator must remain compatible with all registered models.
 
 ### 3.10 IO Layer
 
@@ -204,6 +234,9 @@ Responsibilities:
 
 - run predefined sanity checks,
 - compare selected outputs against expected trends or references,
+- compute objective-error metrics for validation campaigns,
+- run sensitivity analysis over bounded parameter perturbations,
+- run bounded candidate optimization and uncertainty aggregation,
 - support regression-test case definitions,
 - report validation summaries independent of CLI formatting.
 
@@ -214,6 +247,7 @@ Responsibilities:
 - coordinate config loading,
 - instantiate geometry, thermo, and model providers,
 - run gas and droplet solvers in sequence,
+- run optional operator-split two-way coupled iterations by alternating gas solve / droplet solve / source-term correction,
 - collect results,
 - invoke output writing and plotting,
 - produce run summary objects.
@@ -277,7 +311,7 @@ The following data models are recommended architectural concepts. Names may evol
 - `DropletInjectionConfig`
   - initial droplet velocity and diameter conditions
 - `ModelSelectionConfig`
-  - drag model, breakup model, thermo backend selection, optional parameters
+  - drag model, breakup model, thermo backend selection, gas solver mode, coupling mode selection, optional parameters
 - `OutputConfig`
   - output directory, file selections, plotting options
 
@@ -434,7 +468,16 @@ The application should execute in the following sequence:
 
 ### 7.2 Gas-to-Droplet Dependency
 
-For the MVP, the droplet solver depends on the gas solution, but the gas solver does not depend on droplet feedback. This preserves one-way coupling and simplifies the numerical sequence.
+Default behavior remains one-way coupling (`one_way`): the droplet solver depends on the gas solution, but the gas solver does not depend on droplet feedback.
+
+An optional reduced-order mode (`two_way_approx`) is supported in the application orchestration layer. In this mode, the workflow runs a short outer iteration loop that:
+
+1. solves gas and droplet fields,
+2. estimates feedback strength from mass loading and slip,
+3. applies a bounded gas-side correction,
+4. re-solves droplets on the corrected gas field.
+
+This keeps the core gas solver boundary unchanged while enabling UI/CLI selection between legacy one-way and approximate two-way behavior.
 
 ### 7.3 Future Sequence Evolution
 
@@ -661,6 +704,12 @@ Validation should produce structured reports with:
 - pass/warn/fail status,
 - notes on simplified-model limitations.
 
+For quantitative-improvement workflow, validation outputs should additionally include:
+
+- objective score summaries for baseline and optimized candidates,
+- normalized sensitivity coefficients by parameter,
+- uncertainty summary metrics (mean/std/95% CI) for sampled objectives.
+
 ### 12.5 Future Validation Extensions
 
 The architecture should later support:
@@ -669,6 +718,16 @@ The architecture should later support:
 - benchmark datasets,
 - experimental reference import,
 - automated validation dashboards.
+
+### 12.6 Recommended Validation-Improvement Workflow
+
+The architecture should support this ordered runtime workflow:
+
+1. baseline validation execution,
+2. one-at-a-time sensitivity analysis,
+3. bounded parameter optimization,
+4. objective uncertainty aggregation,
+5. final baseline-vs-optimized comparison report.
 
 ---
 

@@ -148,6 +148,16 @@ class TestMultiRunParsing:
         with pytest.raises(ValueError, match="exceeding the limit"):
             expand_multi_value_config(case_name="demo_case", raw_config=config)
 
+    def test_expand_multi_value_config_supports_water_mass_flow_rate_sweep(self):
+        config = _base_gui_config()
+        config["droplet_injection"]["water_mass_flow_rate"] = "0.1, 0.2"
+
+        expanded = expand_multi_value_config(case_name="demo_case", raw_config=config)
+
+        assert len(expanded) == 2
+        assert expanded[0].config["droplet_injection"]["water_mass_flow_rate"] == 0.1
+        assert expanded[1].config["droplet_injection"]["water_mass_flow_rate"] == 0.2
+
     def test_execute_expanded_runs_writes_solver_compatible_yaml_snapshots(self):
         config = _base_gui_config()
         config["boundary_conditions"]["Pt_in"] = "200000, 230000"

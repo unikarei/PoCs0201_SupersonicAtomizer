@@ -74,11 +74,24 @@
           <label>Initial droplet velocity [m/s]
             <input type="text" name="droplet_velocity_in" inputmode="decimal" required value="10" />
           </label>
+          <label>Water mass flow rate [kg/s] (required for two-way)
+            <input type="text" name="water_mass_flow_rate" inputmode="decimal" placeholder="e.g. 0.05" />
+          </label>
           <label>Mean droplet diameter [m]
             <input type="text" name="droplet_diameter_mean_in" inputmode="decimal" required value="0.00005" />
           </label>
           <label>Maximum droplet diameter [m]
             <input type="text" name="droplet_diameter_max_in" inputmode="decimal" required value="0.0001" />
+          </label>
+        </fieldset>
+
+        <fieldset>
+          <legend>Gas-Droplet Coupling</legend>
+          <label>Coupling mode
+            <select name="coupling_mode">
+              <option value="one_way">One-way (legacy)</option>
+              <option value="two_way_approx">Two-way approximation</option>
+            </select>
           </label>
         </fieldset>
 

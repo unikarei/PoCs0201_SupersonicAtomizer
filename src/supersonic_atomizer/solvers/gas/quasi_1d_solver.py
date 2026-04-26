@@ -6,7 +6,13 @@ from dataclasses import dataclass
 import math
 
 from supersonic_atomizer.common import NumericalError
-from supersonic_atomizer.domain import BoundaryConditionConfig, GasSolution, GasState
+from supersonic_atomizer.domain import (
+    BoundaryConditionConfig,
+    CouplingSourceTerms,
+    GasSolution,
+    GasState,
+    ThermoState,
+)
 from supersonic_atomizer.geometry.geometry_model import GeometryModel
 from supersonic_atomizer.solvers.gas.boundary_conditions import initialize_gas_boundary_conditions
 from supersonic_atomizer.solvers.gas.diagnostics import (
@@ -59,6 +65,34 @@ def _assemble_solution(
             messages=messages,
         ),
     )
+
+
+def _build_solution_x_values(
+    geometry_model: GeometryModel,
+    *,
+    gas_solver_mode: str,
+    shock_x: float | None,
+) -> tuple[float, ...]:
+    x_values = list(geometry_model.grid.x_nodes)
+    if gas_solver_mode != "shock_refined" or shock_x is None:
+        return tuple(x_values)
+
+    min_dx = min(
+        (right - left for left, right in zip(x_values[:-1], x_values[1:])),
+        default=geometry_model.x_end - geometry_model.x_start,
+    )
+    refinement_dx = max(min_dx * 0.1, (geometry_model.x_end - geometry_model.x_start) * 1.0e-6)
+    for offset in (-2.0, -1.0, 1.0, 2.0):
+        candidate = shock_x + offset * refinement_dx
+        if geometry_model.x_start < candidate < geometry_model.x_end:
+            x_values.append(candidate)
+
+    x_values.sort()
+    deduplicated: list[float] = []
+    for x_value in x_values:
+        if not deduplicated or not math.isclose(x_value, deduplicated[-1], rel_tol=0.0, abs_tol=1.0e-12):
+            deduplicated.append(x_value)
+    return tuple(deduplicated)
 
 
 def _solve_subsonic_foundation_path(
@@ -343,6 +377,7 @@ def _solve_laval_internal_flow(
     laval_geometry: LavalGeometryInfo,
     boundary_conditions: BoundaryConditionConfig,
     thermo_provider: ThermoProvider,
+    gas_solver_mode: str,
 ) -> GasSolution:
     """Solve the supported choked Laval-nozzle internal branches."""
 
@@ -389,8 +424,14 @@ def _solve_laval_internal_flow(
             thermo_provider=thermo_provider,
         )
 
+    solution_x_values = _build_solution_x_values(
+        geometry_model,
+        gas_solver_mode=gas_solver_mode,
+        shock_x=shock_x,
+    )
+
     states: list[GasState] = []
-    for x_value in geometry_model.grid.x_nodes:
+    for x_value in solution_x_values:
         area_value = geometry_model.area_at(x_value)
         try:
             if x_value < laval_geometry.throat_x:
@@ -443,12 +484,15 @@ def _solve_laval_internal_flow(
     messages = [
         "Gas solution completed across all axial nodes.",
         f"selected_branch={selected_branch}",
+        f"gas_solver_mode={gas_solver_mode}",
         f"critical_pressure_ratio={compute_critical_pressure_ratio(heat_capacity_ratio):.6f}",
         f"supersonic_exit_pressure_ratio={exit_supersonic_pressure / total_pressure:.6f}",
         f"exit_normal_shock_pressure_ratio={exit_shock_pressure / total_pressure:.6f}",
     ]
     if shock_x is not None:
         messages.append(f"shock_location_x={shock_x:.6f}")
+    if gas_solver_mode == "shock_refined" and shock_x is not None:
+        messages.append(f"refined_sample_count={len(solution_x_values) - len(geometry_model.grid.x_nodes)}")
 
     return _assemble_solution(
         states=states,
@@ -462,6 +506,7 @@ def solve_quasi_1d_gas_flow(
     geometry_model: GeometryModel,
     boundary_conditions: BoundaryConditionConfig,
     thermo_provider: ThermoProvider,
+    gas_solver_mode: str = "baseline",
 ) -> GasSolution:
     """Solve the supported quasi-1D gas runtime path on the runtime axial grid."""
 
@@ -504,6 +549,7 @@ def solve_quasi_1d_gas_flow(
             laval_geometry=laval_geometry,
             boundary_conditions=boundary_conditions,
             thermo_provider=thermo_provider,
+            gas_solver_mode=gas_solver_mode,
         )
 
     if outlet_pressure_ratio > critical_pressure_ratio:
@@ -520,4 +566,84 @@ def solve_quasi_1d_gas_flow(
             "converging-diverging Laval nozzle geometry."
         ),
         failure_location=f"x={geometry_model.x_start:.6f}:{geometry_model.x_end:.6f}",
+    )
+
+
+def apply_coupling_source_terms(
+    *,
+    base_gas_solution: GasSolution,
+    coupling_source_terms: CouplingSourceTerms,
+    relaxation: float,
+) -> GasSolution:
+    """Apply bounded liquid-to-gas source-term corrections to a gas solution."""
+
+    if relaxation <= 0.0:
+        raise ValueError("relaxation must be positive.")
+
+    updated_states: list[GasState] = [base_gas_solution.states[0]]
+    for index in range(1, len(base_gas_solution.states)):
+        previous_state = updated_states[index - 1]
+        base_state = base_gas_solution.states[index]
+        dx_value = max(base_state.x - previous_state.x, 1.0e-12)
+        pseudo_dt = dx_value / max(abs(base_state.velocity), 1.0e-9)
+
+        updated_density = max(
+            base_state.density + relaxation * coupling_source_terms.mass_source_values[index] * pseudo_dt,
+            1.0e-9,
+        )
+        updated_velocity = max(
+            base_state.velocity + relaxation * coupling_source_terms.momentum_source_values[index] * pseudo_dt / max(base_state.density, 1.0e-9),
+            1.0e-6,
+        )
+
+        cp_value = base_state.thermo_state.enthalpy / max(base_state.temperature, 1.0e-9)
+        updated_temperature = max(
+            base_state.temperature + relaxation * coupling_source_terms.energy_source_values[index] * pseudo_dt / max(base_state.density * cp_value, 1.0e-9),
+            1.0,
+        )
+
+        pressure_scale = (updated_density * updated_temperature) / max(
+            base_state.density * base_state.temperature,
+            1.0e-12,
+        )
+        updated_pressure = max(base_state.pressure * pressure_scale, 1.0)
+
+        updated_thermo = ThermoState(
+            pressure=updated_pressure,
+            temperature=updated_temperature,
+            density=updated_density,
+            enthalpy=base_state.thermo_state.enthalpy * (updated_temperature / max(base_state.temperature, 1.0e-9)),
+            sound_speed=base_state.thermo_state.sound_speed * math.sqrt(updated_temperature / max(base_state.temperature, 1.0e-9)),
+            dynamic_viscosity=base_state.thermo_state.dynamic_viscosity,
+        )
+        updated_state = GasState(
+            x=base_state.x,
+            area=base_state.area,
+            pressure=updated_pressure,
+            temperature=updated_temperature,
+            density=updated_density,
+            velocity=updated_velocity,
+            mach_number=updated_velocity / max(updated_thermo.sound_speed, 1.0e-9),
+            thermo_state=updated_thermo,
+        )
+        updated_states.append(updated_state)
+
+    messages = tuple(base_gas_solution.diagnostics.messages) if base_gas_solution.diagnostics is not None else ()
+    if "two_way_source_terms_applied" not in messages:
+        messages = messages + ("two_way_source_terms_applied",)
+
+    return GasSolution(
+        states=tuple(updated_states),
+        x_values=tuple(state.x for state in updated_states),
+        area_values=tuple(state.area for state in updated_states),
+        pressure_values=tuple(state.pressure for state in updated_states),
+        temperature_values=tuple(state.temperature for state in updated_states),
+        density_values=tuple(state.density for state in updated_states),
+        velocity_values=tuple(state.velocity for state in updated_states),
+        mach_number_values=tuple(state.mach_number for state in updated_states),
+        diagnostics=create_gas_solver_diagnostics(
+            status="completed",
+            warnings=tuple(base_gas_solution.diagnostics.warnings) if base_gas_solution.diagnostics is not None else (),
+            messages=messages,
+        ),
     )
