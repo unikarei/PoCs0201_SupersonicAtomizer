@@ -16,6 +16,15 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 
 from supersonic_atomizer.gui.case_store import CaseNameError, CaseNotFoundError, CaseStore
+from supersonic_atomizer.gui.job_store import get_job_store
+from supersonic_atomizer.gui.multi_run import MultiRunSimulationResult
+from supersonic_atomizer.gui.pages.post_graphs import extract_overlay_plot_series, extract_plot_series
+from supersonic_atomizer.gui.pages.post_table import aggregate_result_to_table_rows, generate_csv_content, result_to_table_rows
+from supersonic_atomizer.gui.plot_utils import figure_to_base64
+import matplotlib
+import matplotlib.pyplot as plt
+
+matplotlib.use("Agg")
 from supersonic_atomizer.gui.schemas import CaseCreateRequest
 
 router = APIRouter()
@@ -111,3 +120,73 @@ async def delete_case(name: str) -> None:
         store.delete(name)
     except CaseNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+@router.get("/{name}/last_result")
+async def get_last_result_for_case(name: str) -> dict[str, Any]:
+    """Return the most recent completed simulation result payload for *name*.
+
+    The payload mirrors ``/api/simulation/result/{job_id}`` and contains
+    base64 plots, table rows, CSV text, and run_count when available. Uses
+    default (SI) unit preferences to build figures.
+    """
+    job_store = get_job_store()
+    record = job_store.latest_completed_for_case(name)
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"No completed run found for case {name!r}.")
+
+    # Build payload similar to simulation_router.get_simulation_result
+    plots: dict[str, str] = {}
+    table_rows: list[dict[str, Any]] = []
+    plot_fields: list[str] = []
+    run_count = 1
+
+    if isinstance(record.result, MultiRunSimulationResult):
+        labeled_results = list(record.result.labeled_simulation_results())
+        if not labeled_results:
+            raise HTTPException(status_code=409, detail="Simulation result is not available.")
+        overlay_series = extract_overlay_plot_series(labeled_results, None)
+        for field, data in overlay_series.items():
+            fig, ax = plt.subplots(figsize=(6.5, 3.5))
+            for line in data["series"]:
+                ax.plot(line["x"], line["y"], label=line["label"])
+            ax.set_xlabel(data["x_label"])
+            ax.set_ylabel(data["ylabel"])
+            ax.set_title(data["title"])
+            ax.grid(True, alpha=0.3)
+            if len(data["series"]) > 1:
+                ax.legend(fontsize="small")
+            plt.tight_layout()
+            plots[field] = figure_to_base64(fig)
+            plt.close(fig)
+        table_rows = aggregate_result_to_table_rows(labeled_results, None)
+        plot_fields = list(overlay_series.keys())
+        run_count = record.result.run_count
+    else:
+        run_result = record.result
+        if run_result is None or run_result.simulation_result is None:
+            raise HTTPException(status_code=409, detail="Simulation result is not available.")
+        sim_result = run_result.simulation_result
+        series = extract_plot_series(sim_result, None)
+        for field, data in series.items():
+            fig, ax = plt.subplots(figsize=(6, 3))
+            ax.plot(data["x"], data["y"])
+            ax.set_xlabel(data["x_label"])
+            ax.set_ylabel(data["ylabel"])
+            ax.set_title(data["title"])
+            ax.grid(True, alpha=0.3)
+            plt.tight_layout()
+            plots[field] = figure_to_base64(fig)
+            plt.close(fig)
+        table_rows = result_to_table_rows(sim_result, None)
+        plot_fields = list(series.keys())
+
+    csv_content = generate_csv_content(table_rows)
+
+    return {
+        "status": record.status,
+        "plots": plots,
+        "plot_fields": plot_fields,
+        "table_rows": table_rows,
+        "csv": csv_content,
+        "run_count": run_count,
+    }

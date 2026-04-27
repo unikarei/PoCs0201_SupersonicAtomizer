@@ -106,6 +106,13 @@ def _validate_droplet_injection(raw_config: dict[str, Any]) -> None:
             "droplet_injection.water_mass_flow_rate",
         )
 
+    water_mass_flow_rate_percent = droplet_injection.get("water_mass_flow_rate_percent")
+    if water_mass_flow_rate_percent is not None:
+        _require_positive(
+            water_mass_flow_rate_percent,
+            "droplet_injection.water_mass_flow_rate_percent",
+        )
+
 
 def _validate_models(raw_config: dict[str, Any]) -> None:
     models = raw_config.get("models", {})
@@ -178,10 +185,12 @@ def _validate_models(raw_config: dict[str, Any]) -> None:
     _require_positive(droplet_distribution_sigma, "models.droplet_distribution_sigma")
 
     if coupling_mode in {"two_way_approx", "two_way_coupled"}:
-        water_mass_flow_rate = raw_config["droplet_injection"].get("water_mass_flow_rate")
-        if water_mass_flow_rate is None:
+        droplet_injection = raw_config["droplet_injection"]
+        water_mass_flow_rate = droplet_injection.get("water_mass_flow_rate")
+        water_mass_flow_rate_percent = droplet_injection.get("water_mass_flow_rate_percent")
+        if water_mass_flow_rate is None and water_mass_flow_rate_percent is None:
             raise ValueError(
-                "Field 'droplet_injection.water_mass_flow_rate' is required when models.coupling_mode is 'two_way_approx' or 'two_way_coupled'."
+                "Either 'droplet_injection.water_mass_flow_rate' [kg/s] or 'droplet_injection.water_mass_flow_rate_percent' [%] is required when models.coupling_mode is 'two_way_approx' or 'two_way_coupled'."
             )
 
     steam_property_model = models.get("steam_property_model")

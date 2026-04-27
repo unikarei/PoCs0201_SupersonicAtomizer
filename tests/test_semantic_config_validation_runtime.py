@@ -109,7 +109,16 @@ class TestSemanticConfigValidationRuntime(unittest.TestCase):
 
         self.assertIs(validated, raw_config)
 
-    def test_rejects_two_way_approx_without_water_mass_flow_rate(self) -> None:
+    def test_accepts_two_way_approx_with_water_mass_flow_rate_percent(self) -> None:
+        raw_config = _make_valid_config()
+        raw_config["models"]["coupling_mode"] = "two_way_approx"
+        raw_config["droplet_injection"]["water_mass_flow_rate_percent"] = 5.0
+
+        validated = validate_semantic_config(raw_config)
+
+        self.assertIs(validated, raw_config)
+
+    def test_rejects_two_way_approx_without_mass_flow_input(self) -> None:
         raw_config = _make_valid_config()
         raw_config["models"]["coupling_mode"] = "two_way_approx"
 

@@ -104,7 +104,7 @@ async def run_simulation(
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    job_id = get_job_store().create_job()
+    job_id = get_job_store().create_job(case_name=body.case_name)
     if body.config:
         thread = threading.Thread(
             target=_run_multi_job,

@@ -53,6 +53,7 @@ def _translate_droplet_injection(raw_config: dict[str, Any]) -> DropletInjection
         droplet_diameter_mean_in=droplet_section["droplet_diameter_mean_in"],
         droplet_diameter_max_in=droplet_section["droplet_diameter_max_in"],
         water_mass_flow_rate=droplet_section.get("water_mass_flow_rate"),
+        water_mass_flow_rate_percent=droplet_section.get("water_mass_flow_rate_percent"),
     )
 
 

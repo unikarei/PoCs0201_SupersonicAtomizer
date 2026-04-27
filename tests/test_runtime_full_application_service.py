@@ -102,6 +102,25 @@ class TestRuntimeFullApplicationService(unittest.TestCase):
 		self.assertEqual(run_result.status, "completed")
 		self.assertIsNotNone(run_result.simulation_result)
 
+	def test_application_service_runs_two_way_approx_with_percent_mass_flow_input(self) -> None:
+		service = create_application_service()
+		case_yaml = _build_case_yaml(working_fluid="air").replace(
+			"coupling_mode: one_way",
+			"coupling_mode: two_way_approx",
+		).replace(
+			"droplet_diameter_max_in: 0.0002",
+			"droplet_diameter_max_in: 0.0002\n  water_mass_flow_rate_percent: 5.0",
+		)
+
+		with tempfile.TemporaryDirectory() as temporary_directory:
+			case_path = Path(temporary_directory) / "air_two_way_percent_case.yaml"
+			case_path.write_text(case_yaml, encoding="utf-8")
+
+			run_result = service.run_simulation(str(case_path))
+
+		self.assertEqual(run_result.status, "completed")
+		self.assertIsNotNone(run_result.simulation_result)
+
 	def test_application_service_runs_two_way_coupled_workflow(self) -> None:
 		service = create_application_service()
 		case_yaml = _build_case_yaml(working_fluid="air").replace(

@@ -45,6 +45,7 @@ class DropletInjectionConfig:
     droplet_diameter_mean_in: float
     droplet_diameter_max_in: float
     water_mass_flow_rate: float | None = None
+    water_mass_flow_rate_percent: float | None = None
 
 
 @dataclass(frozen=True, slots=True)

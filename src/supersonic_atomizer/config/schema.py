@@ -128,6 +128,12 @@ def _validate_droplet_injection(raw_config: dict[str, Any]) -> None:
         raise ValueError(
             "Field 'droplet_injection.water_mass_flow_rate' must be numeric when supplied."
         )
+    if "water_mass_flow_rate_percent" in droplet_section and not _is_number(
+        droplet_section["water_mass_flow_rate_percent"]
+    ):
+        raise ValueError(
+            "Field 'droplet_injection.water_mass_flow_rate_percent' must be numeric when supplied."
+        )
 
 
 def _validate_models_section(raw_config: dict[str, Any]) -> None:

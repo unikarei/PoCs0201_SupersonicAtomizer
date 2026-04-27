@@ -81,6 +81,7 @@ class TestConfigTranslationRuntime(unittest.TestCase):
                     "droplet_diameter_mean_in": 1.2e-4,
                     "droplet_diameter_max_in": 2.4e-4,
                     "water_mass_flow_rate": 0.001,
+                    "water_mass_flow_rate_percent": 4.5,
                 },
                 "models": {
                     "drag_model": "standard_sphere",
@@ -110,6 +111,7 @@ class TestConfigTranslationRuntime(unittest.TestCase):
         self.assertEqual(case_config.fluid.working_fluid, "steam")
         self.assertEqual(case_config.fluid.inlet_wetness, 0.03)
         self.assertEqual(case_config.droplet_injection.water_mass_flow_rate, 0.001)
+        self.assertEqual(case_config.droplet_injection.water_mass_flow_rate_percent, 4.5)
         self.assertEqual(case_config.models.coupling_mode, "two_way_approx")
         self.assertEqual(case_config.models.two_way_max_iterations, 4)
         self.assertEqual(case_config.models.two_way_feedback_relaxation, 0.2)

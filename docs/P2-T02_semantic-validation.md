@@ -93,6 +93,7 @@ The following must be strictly positive where supplied:
 - `droplet_diameter_mean_in`
 - `droplet_diameter_max_in`
 - `water_mass_flow_rate` if supplied
+- `water_mass_flow_rate_percent` if supplied
 - every value in `geometry.area_distribution.A`
 
 The following additional physical consistency rules apply:

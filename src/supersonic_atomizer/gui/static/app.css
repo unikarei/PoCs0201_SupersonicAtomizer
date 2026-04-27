@@ -423,3 +423,146 @@ input:focus, select:focus {
 .unit-group-row select {
   width: 180px;
 }
+
+/* ── Breakup model row (select + help button inline, button outside label) ── */
+.breakup-model-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.4rem;
+  margin-bottom: 0.7rem;
+}
+
+.breakup-model-row label {
+  margin-bottom: 0;
+}
+
+.field-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.help-btn {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border: 1px solid #3a78b5;
+  border-radius: 50%;
+  background: #eef4fb;
+  color: #3a78b5;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0;
+  transition: background 0.15s, color 0.15s;
+}
+
+.help-btn:hover {
+  background: #3a78b5;
+  color: #fff;
+}
+
+/* ── Breakup model help modal ─────────────────────────────────────────────── */
+.modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.modal-overlay.open {
+  display: flex;
+}
+
+.modal-box {
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+  max-width: 680px;
+  width: 95%;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.8rem 1.2rem;
+  background: #1e2a38;
+  color: #fff;
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 1rem;
+  border: none;
+  padding: 0;
+  color: #fff;
+}
+
+.modal-close-btn {
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 1.1rem;
+  cursor: pointer;
+  padding: 0 0.3rem;
+  line-height: 1;
+  opacity: 0.8;
+}
+
+.modal-close-btn:hover { opacity: 1; }
+
+.modal-body {
+  padding: 1rem 1.2rem;
+  overflow-y: auto;
+  font-size: 0.88rem;
+  color: #333;
+  line-height: 1.6;
+}
+
+.modal-body hr {
+  border: none;
+  border-top: 1px solid #d0d8e0;
+  margin: 0.8rem 0;
+}
+
+.model-desc h4 {
+  font-size: 0.95rem;
+  color: #1e2a38;
+  margin: 0.5rem 0 0.3rem;
+}
+
+.model-desc p { margin: 0.3rem 0; }
+
+.model-desc ul {
+  margin: 0.3rem 0 0.3rem 1.2rem;
+  padding: 0;
+}
+
+.model-desc em {
+  display: block;
+  color: #555;
+  font-style: italic;
+  margin-top: 0.4rem;
+}
+
+.model-table {
+  border-collapse: collapse;
+  font-size: 0.83rem;
+  margin: 0.4rem 0;
+}
+
+.model-table th, .model-table td {
+  border: 1px solid #d0d8e0;
+  padding: 0.2rem 0.6rem;
+}
+
+.model-table th { background: #eef2f6; font-weight: 600; }

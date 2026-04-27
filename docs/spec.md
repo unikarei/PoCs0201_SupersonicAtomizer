@@ -229,7 +229,8 @@ These items may be considered in later releases only after the MVP is validated.
 | Name | Description | Unit | Notes |
 |---|---|---:|---|
 | `inlet_wetness` | Inlet wetness for steam | - | Optional, mainly for steam |
-| `water_mass_flow_rate` | Injected droplet mass flow rate | kg/s | Optional if another equivalent loading metric is defined later |
+| `water_mass_flow_rate` | Injected droplet mass flow rate | kg/s | Optional when `water_mass_flow_rate_percent` is supplied |
+| `water_mass_flow_rate_percent` | Injected droplet loading versus gas mass flow | % | Optional when `water_mass_flow_rate` is supplied |
 | `critical_weber_number` | Breakup threshold | - | Required by breakup model if not defaulted |
 | `breakup_factor_mean` | Mean diameter reduction factor | - | Model parameter |
 | `breakup_factor_max` | Maximum diameter reduction factor | - | Model parameter |

@@ -20,6 +20,9 @@ from supersonic_atomizer.app.services import SimulationRunResult
 @dataclass
 class JobRecord:
     job_id: str
+    # case_name is optional but recorded when the job is created from a
+    # particular case; this enables lookups of the last result per case.
+    case_name: str | None = None
     status: str = "running"           # "running" | "completed" | "failed"
     result: Optional[Any] = None
     error: Optional[str] = None
@@ -32,11 +35,18 @@ class JobStore:
         self._jobs: dict[str, JobRecord] = {}
         self._lock = threading.Lock()
 
-    def create_job(self) -> str:
-        """Create a new job in 'running' state and return its job_id."""
+    def create_job(self, case_name: str | None = None) -> str:
+        """Create a new job in 'running' state and return its job_id.
+
+        Parameters
+        ----------
+        case_name:
+            Optional case name associated with this job. Recorded for
+            lookup of the most recent completed result for a case.
+        """
         job_id = str(uuid.uuid4())
         with self._lock:
-            self._jobs[job_id] = JobRecord(job_id=job_id)
+            self._jobs[job_id] = JobRecord(job_id=job_id, case_name=case_name)
         return job_id
 
     def mark_complete(self, job_id: str, result: Any) -> None:
@@ -60,6 +70,19 @@ class JobStore:
     def all_ids(self) -> list[str]:
         with self._lock:
             return list(self._jobs.keys())
+
+    def latest_completed_for_case(self, case_name: str) -> Optional[JobRecord]:
+        """Return the most recently created completed JobRecord for *case_name*.
+
+        Returns ``None`` when no completed job for the case exists.
+        """
+        with self._lock:
+            # Iterate job records in insertion order reversed to prefer latest
+            for jid in reversed(list(self._jobs.keys())):
+                rec = self._jobs[jid]
+                if rec.case_name == case_name and rec.status == "completed" and rec.result is not None:
+                    return rec
+        return None
 
 
 # Module-level singleton — one store per server process.

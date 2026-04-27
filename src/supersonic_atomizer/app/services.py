@@ -63,18 +63,60 @@ def _mean_absolute_difference(left: tuple[float, ...], right: tuple[float, ...])
 	return sum(abs(a - b) for a, b in zip(left, right, strict=False)) / len(left)
 
 
+def _inlet_gas_mass_flow_rate(gas_solution: GasSolution) -> float:
+	if not gas_solution.states:
+		return 0.0
+	inlet_state = gas_solution.states[0]
+	return _safe_abs(inlet_state.density * inlet_state.velocity * inlet_state.area)
+
+
+def _resolved_water_mass_flow_rate(case_config: CaseConfig, gas_solution: GasSolution) -> float | None:
+	"""Resolve liquid mass flow to an absolute kg/s value.
+
+	Priority:
+	1) Explicit ``water_mass_flow_rate`` [kg/s]
+	2) ``water_mass_flow_rate_percent`` [% of inlet gas mass flow]
+	"""
+
+	explicit_mass_flow = case_config.droplet_injection.water_mass_flow_rate
+	if explicit_mass_flow is not None:
+		return _safe_abs(explicit_mass_flow)
+
+	percent_loading = case_config.droplet_injection.water_mass_flow_rate_percent
+	if percent_loading is None:
+		return None
+
+	gas_mass_flow_rate = _inlet_gas_mass_flow_rate(gas_solution)
+	if gas_mass_flow_rate <= 1.0e-12:
+		return None
+
+	return gas_mass_flow_rate * _safe_abs(percent_loading) / 100.0
+
+
+def _with_resolved_injection_mass_flow(case_config: CaseConfig, gas_solution: GasSolution) -> CaseConfig:
+	resolved_mass_flow = _resolved_water_mass_flow_rate(case_config, gas_solution)
+	if resolved_mass_flow is None:
+		return case_config
+	return replace(
+		case_config,
+		droplet_injection=replace(
+			case_config.droplet_injection,
+			water_mass_flow_rate=resolved_mass_flow,
+		),
+	)
+
+
 def _estimate_mass_loading(case_config: CaseConfig, gas_solution: GasSolution) -> float:
 	"""Return scalar mass-loading estimate phi = m_liq / m_gas at inlet.
 
 	This is a reduced-order estimate used by the two-way approximation mode.
 	"""
 
-	water_mass_flow_rate = case_config.droplet_injection.water_mass_flow_rate
+	water_mass_flow_rate = _resolved_water_mass_flow_rate(case_config, gas_solution)
 	if water_mass_flow_rate is None:
 		return 0.0
 
-	inlet_state = gas_solution.states[0]
-	gas_mass_flow_rate = _safe_abs(inlet_state.density * inlet_state.velocity * inlet_state.area)
+	gas_mass_flow_rate = _inlet_gas_mass_flow_rate(gas_solution)
 	if gas_mass_flow_rate <= 1.0e-12:
 		return 0.0
 
@@ -254,16 +296,20 @@ class ApplicationService:
 			gas_solver_mode=model_settings.gas_solver_mode,
 		)
 
-		drag_model = self.drag_selector(startup_dependencies.case_config.models)
+		resolved_case_config = _with_resolved_injection_mass_flow(
+			startup_dependencies.case_config,
+			base_gas_solution,
+		)
+		drag_model = self.drag_selector(resolved_case_config.models)
 
-		mass_loading = _estimate_mass_loading(startup_dependencies.case_config, base_gas_solution)
+		mass_loading = _estimate_mass_loading(resolved_case_config, base_gas_solution)
 		relaxation = model_settings.two_way_feedback_relaxation
 		max_iterations = model_settings.two_way_max_iterations
 
 		gas_solution = base_gas_solution
 		droplet_solution = self.droplet_solver(
 			gas_solution=gas_solution,
-			injection_config=startup_dependencies.case_config.droplet_injection,
+			injection_config=resolved_case_config.droplet_injection,
 			drag_model=drag_model,
 			breakup_model=breakup_model,
 			distribution_model=model_settings.droplet_distribution_model,
@@ -282,7 +328,7 @@ class ApplicationService:
 			)
 			droplet_solution = self.droplet_solver(
 				gas_solution=gas_solution,
-				injection_config=startup_dependencies.case_config.droplet_injection,
+				injection_config=resolved_case_config.droplet_injection,
 				drag_model=drag_model,
 				breakup_model=breakup_model,
 				distribution_model=model_settings.droplet_distribution_model,
@@ -311,9 +357,13 @@ class ApplicationService:
 			thermo_provider=startup_dependencies.thermo_provider,
 			gas_solver_mode=model_settings.gas_solver_mode,
 		)
+		resolved_case_config = _with_resolved_injection_mass_flow(
+			startup_dependencies.case_config,
+			gas_solution,
+		)
 		droplet_solution = self.droplet_solver(
 			gas_solution=gas_solution,
-			injection_config=startup_dependencies.case_config.droplet_injection,
+			injection_config=resolved_case_config.droplet_injection,
 			drag_model=drag_model,
 			breakup_model=breakup_model,
 			distribution_model=model_settings.droplet_distribution_model,
@@ -340,7 +390,7 @@ class ApplicationService:
 
 			droplet_solution = self.droplet_solver(
 				gas_solution=gas_solution,
-				injection_config=startup_dependencies.case_config.droplet_injection,
+				injection_config=resolved_case_config.droplet_injection,
 				drag_model=drag_model,
 				breakup_model=breakup_model,
 				distribution_model=model_settings.droplet_distribution_model,

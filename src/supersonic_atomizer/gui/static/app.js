@@ -107,6 +107,25 @@ async function selectCase(name) {
     const cfg = await apiFetch(`/api/cases/${encodeURIComponent(name)}`);
     populateConditionsForm(cfg);
     populateGridForm(cfg);
+    // Try to load the most recent completed simulation result for this case
+    try {
+      const last = await apiFetch(`/api/cases/${encodeURIComponent(name)}/last_result`);
+      plotData = last.plots || {};
+      tableRows = last.table_rows || [];
+      csvContent = last.csv || "";
+      const fields = last.plot_fields || Object.keys(plotData);
+      renderPlots(fields);
+      renderTable(tableRows);
+      document.getElementById("btn-download-csv").disabled = !csvContent;
+    } catch (_e) {
+      // No previous result for this case — clear any existing post-tab content
+      plotData = {};
+      tableRows = [];
+      csvContent = "";
+      renderPlots([]);
+      renderTable([]);
+      document.getElementById("btn-download-csv").disabled = true;
+    }
   } catch (e) {
     console.warn("Failed to load case config:", e);
   }
@@ -135,6 +154,84 @@ document.getElementById("btn-new-case").addEventListener("click", async () => {
 document.getElementById("btn-refresh-cases").addEventListener("click", loadCaseList);
 
 // ── Conditions form ─────────────────────────────────────────────────────────
+
+// Default values for each breakup model — kept in sync with config/defaults.py
+const MODEL_DEFAULTS = {
+  weber_critical: {
+    critical_weber_number: 12,
+    breakup_factor_mean:   0.5,
+    breakup_factor_max:    0.5,
+  },
+  bag_stripping: {
+    critical_weber_number: 12,
+  },
+  khrt: {
+    khrt_B0:          0.61,
+    khrt_B1:          40.0,
+    khrt_Crt:         0.1,
+    liquid_density:   998.2,
+    liquid_viscosity: 1.002e-3,
+  },
+};
+
+// Fill any empty numeric field in the conditions-form with a default value.
+function applyModelDefaults(model) {
+  const f = document.getElementById("conditions-form");
+  const defaults = MODEL_DEFAULTS[model] || {};
+  for (const [fieldName, defaultVal] of Object.entries(defaults)) {
+    const el = f.elements[fieldName];
+    if (!el) continue;
+    if (el.value.trim() === "") {
+      el.value = defaultVal;
+    }
+  }
+}
+
+function updateBreakupModelState(model) {
+  const weberRow  = document.getElementById("breakup-critical-weber-row");
+  const weberSection = document.getElementById("breakup-params-weber");
+  const khrtSection  = document.getElementById("breakup-params-khrt");
+  if (model === "khrt") {
+    weberRow.classList.add("hidden");
+    weberSection.classList.add("hidden");
+    khrtSection.classList.remove("hidden");
+  } else if (model === "bag_stripping") {
+    weberRow.classList.remove("hidden");
+    weberSection.classList.add("hidden");
+    khrtSection.classList.add("hidden");
+  } else {
+    // weber_critical
+    weberRow.classList.remove("hidden");
+    weberSection.classList.remove("hidden");
+    khrtSection.classList.add("hidden");
+  }
+  applyModelDefaults(model);
+}
+
+function showBreakupModelHelp(event) {
+  if (event) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+  document.getElementById("breakup-model-help-modal").classList.add("open");
+}
+
+function closeBreakupModelHelp(event) {
+  if (event && event.target !== event.currentTarget) {
+    return;
+  }
+  document.getElementById("breakup-model-help-modal").classList.remove("open");
+}
+
+function updateInletWetnessState(fluidValue) {
+  const f = document.getElementById("conditions-form");
+  const input = f.elements.inlet_wetness;
+  if (!input) return;
+  const isSteam = (fluidValue || "").toLowerCase() === "steam";
+  input.disabled = !isSteam;
+  if (!isSteam) input.value = "";
+}
+
 function populateConditionsForm(cfg) {
   const f = document.getElementById("conditions-form");
   const bc = cfg.boundary_conditions || {};
@@ -142,19 +239,41 @@ function populateConditionsForm(cfg) {
   const di = cfg.droplet_injection || {};
   const ms = cfg.models || cfg.model_selection || {};
 
-  setFieldValue(f, "working_fluid", fl.working_fluid || "air");
+  const workingFluid = fl.working_fluid || "air";
+  setFieldValue(f, "working_fluid", workingFluid);
+  updateInletWetnessState(workingFluid);
   setFieldValue(f, "inlet_wetness", fl.inlet_wetness ?? "");
   setFieldValue(f, "Pt_in", bc.Pt_in ?? "");
   setFieldValue(f, "Tt_in", bc.Tt_in ?? "");
   setFieldValue(f, "Ps_out", bc.Ps_out ?? "");
   setFieldValue(f, "droplet_velocity_in", di.droplet_velocity_in ?? "");
   setFieldValue(f, "water_mass_flow_rate", di.water_mass_flow_rate ?? "");
+  setFieldValue(f, "water_mass_flow_rate_percent", di.water_mass_flow_rate_percent ?? "");
+  const hasKgPerS = di.water_mass_flow_rate !== undefined && di.water_mass_flow_rate !== null && String(di.water_mass_flow_rate) !== "";
+  const hasPercent = di.water_mass_flow_rate_percent !== undefined && di.water_mass_flow_rate_percent !== null && String(di.water_mass_flow_rate_percent) !== "";
+  setFieldValue(
+    f,
+    "water_mass_flow_mode",
+    hasPercent && !hasKgPerS ? "percent" : "kg_per_s"
+  );
   setFieldValue(f, "droplet_diameter_mean_in", di.droplet_diameter_mean_in ?? "");
   setFieldValue(f, "droplet_diameter_max_in", di.droplet_diameter_max_in ?? "");
   setFieldValue(f, "coupling_mode", ms.coupling_mode ?? "one_way");
-  setFieldValue(f, "critical_weber_number", ms.critical_weber_number ?? "");
-  setFieldValue(f, "breakup_factor_mean", ms.breakup_factor_mean ?? "");
-  setFieldValue(f, "breakup_factor_max", ms.breakup_factor_max ?? "");
+  const breakupModel = ms.breakup_model || "weber_critical";
+  setFieldValue(f, "breakup_model", breakupModel);
+  updateBreakupModelState(breakupModel);
+  // Use stored values when present; fall back to model defaults so fields are
+  // never blank after selecting a model.
+  const wd = MODEL_DEFAULTS.weber_critical;
+  const kd = MODEL_DEFAULTS.khrt;
+  setFieldValue(f, "critical_weber_number", ms.critical_weber_number ?? wd.critical_weber_number);
+  setFieldValue(f, "breakup_factor_mean",   ms.breakup_factor_mean   ?? wd.breakup_factor_mean);
+  setFieldValue(f, "breakup_factor_max",    ms.breakup_factor_max    ?? wd.breakup_factor_max);
+  setFieldValue(f, "khrt_B0",          ms.khrt_B0          ?? kd.khrt_B0);
+  setFieldValue(f, "khrt_B1",          ms.khrt_B1          ?? kd.khrt_B1);
+  setFieldValue(f, "khrt_Crt",         ms.khrt_Crt         ?? kd.khrt_Crt);
+  setFieldValue(f, "liquid_density",   ms.liquid_density   ?? kd.liquid_density);
+  setFieldValue(f, "liquid_viscosity", ms.liquid_viscosity ?? kd.liquid_viscosity);
 }
 
 function setFieldValue(form, name, value) {
@@ -165,6 +284,55 @@ function setFieldValue(form, name, value) {
     el.value = value.join(" ");
   } else {
     el.value = value;
+  }
+}
+
+function mergeCaseConfigs(baseCfg = {}, overrideCfg = {}) {
+  // Preserve existing nested sections (e.g., droplet_injection.water_mass_flow_rate)
+  // when override payloads only include a subset of fields.
+  return {
+    ...baseCfg,
+    ...overrideCfg,
+    fluid: {
+      ...(baseCfg.fluid || {}),
+      ...(overrideCfg.fluid || {}),
+    },
+    boundary_conditions: {
+      ...(baseCfg.boundary_conditions || {}),
+      ...(overrideCfg.boundary_conditions || {}),
+    },
+    droplet_injection: {
+      ...(baseCfg.droplet_injection || {}),
+      ...(overrideCfg.droplet_injection || {}),
+    },
+    models: {
+      ...(baseCfg.models || {}),
+      ...(overrideCfg.models || {}),
+    },
+    geometry: {
+      ...(baseCfg.geometry || {}),
+      ...(overrideCfg.geometry || {}),
+    },
+    outputs: {
+      ...(baseCfg.outputs || {}),
+      ...(overrideCfg.outputs || {}),
+    },
+  };
+}
+
+function assertTwoWayMassFlowRequirement(cfg) {
+  const couplingMode = cfg?.models?.coupling_mode;
+  if (couplingMode !== "two_way_approx" && couplingMode !== "two_way_coupled") {
+    return;
+  }
+  const mfr = cfg?.droplet_injection?.water_mass_flow_rate;
+  const mfrPercent = cfg?.droplet_injection?.water_mass_flow_rate_percent;
+  const hasMfr = !(mfr === undefined || mfr === null || String(mfr).trim() === "");
+  const hasPercent = !(mfrPercent === undefined || mfrPercent === null || String(mfrPercent).trim() === "");
+  if (!hasMfr && !hasPercent) {
+    throw new Error(
+      "Water mass flow is required for two-way modes. Provide either [kg/s] or [% of gas mass flow]."
+    );
   }
 }
 
@@ -197,27 +365,44 @@ function readConditionsFormForRun() {
   const cfg = {
     fluid: { working_fluid: fl },
     boundary_conditions: {
-      Pt_in:  f.elements.Pt_in.value.trim(),
-      Tt_in:  f.elements.Tt_in.value.trim(),
-      Ps_out: f.elements.Ps_out.value.trim(),
+      Pt_in:  parseNumericOrList(f.elements.Pt_in.value, "Inlet total pressure P₀ [Pa]"),
+      Tt_in:  parseNumericOrList(f.elements.Tt_in.value, "Inlet total temperature T₀ [K]"),
+      Ps_out: parseNumericOrList(f.elements.Ps_out.value, "Outlet static pressure P₂ [Pa]"),
     },
     droplet_injection: {
-      droplet_velocity_in:      f.elements.droplet_velocity_in.value.trim(),
-      droplet_diameter_mean_in: f.elements.droplet_diameter_mean_in.value.trim(),
-      droplet_diameter_max_in:  f.elements.droplet_diameter_max_in.value.trim(),
+      droplet_velocity_in:      parseNumericOrList(f.elements.droplet_velocity_in.value, "Initial droplet velocity [m/s]"),
+      droplet_diameter_mean_in: parseNumericOrList(f.elements.droplet_diameter_mean_in.value, "Mean droplet diameter [m]"),
+      droplet_diameter_max_in:  parseNumericOrList(f.elements.droplet_diameter_max_in.value, "Maximum droplet diameter [m]"),
     },
     models: {
       coupling_mode:         couplingMode,
-      breakup_model:         "weber_critical",
-      critical_weber_number: f.elements.critical_weber_number.value.trim(),
-      breakup_factor_mean:   f.elements.breakup_factor_mean.value.trim(),
-      breakup_factor_max:    f.elements.breakup_factor_max.value.trim(),
+      breakup_model:         f.elements.breakup_model.value,
+      critical_weber_number: parseNumericOrList(f.elements.critical_weber_number.value, "Critical Weber number", { optional: true }),
+      breakup_factor_mean:   parseNumericOrList(f.elements.breakup_factor_mean.value, "Breakup factor — mean diameter", { optional: true }),
+      breakup_factor_max:    parseNumericOrList(f.elements.breakup_factor_max.value, "Breakup factor — maximum diameter", { optional: true }),
+      khrt_B0:               parseNumericOrList(f.elements.khrt_B0.value, "KH wavelength coefficient B₀", { optional: true }),
+      khrt_B1:               parseNumericOrList(f.elements.khrt_B1.value, "KH breakup time coefficient B₁", { optional: true }),
+      khrt_Crt:              parseNumericOrList(f.elements.khrt_Crt.value, "RT wavelength coefficient C_RT", { optional: true }),
+      liquid_density:        parseNumericOrList(f.elements.liquid_density.value, "Liquid density [kg/m³]", { optional: true }),
+      liquid_viscosity:      parseNumericOrList(f.elements.liquid_viscosity.value, "Liquid viscosity [Pa·s]", { optional: true }),
     },
   };
-  const wetness = f.elements.inlet_wetness.value.trim();
-  if (wetness) cfg.fluid.inlet_wetness = wetness;
-  const waterMassFlowRate = f.elements.water_mass_flow_rate.value.trim();
-  if (waterMassFlowRate) cfg.droplet_injection.water_mass_flow_rate = waterMassFlowRate;
+  const wetness = parseNumericOrList(f.elements.inlet_wetness.value, "Inlet wetness", { optional: true });
+  cfg.fluid.inlet_wetness = wetness === null ? null : wetness;
+  const waterMassFlowMode = f.elements.water_mass_flow_mode.value;
+  const waterMassFlowRate = parseNumericOrList(f.elements.water_mass_flow_rate.value, "Water mass flow rate [kg/s]", { optional: true });
+  const waterMassFlowRatePercent = parseNumericOrList(f.elements.water_mass_flow_rate_percent.value, "Water mass flow rate [% of gas]", { optional: true });
+  if (waterMassFlowMode === "percent") {
+    cfg.droplet_injection.water_mass_flow_rate = null;
+    if (waterMassFlowRatePercent !== null) {
+      cfg.droplet_injection.water_mass_flow_rate_percent = waterMassFlowRatePercent;
+    }
+  } else {
+    cfg.droplet_injection.water_mass_flow_rate_percent = null;
+    if (waterMassFlowRate !== null) {
+      cfg.droplet_injection.water_mass_flow_rate = waterMassFlowRate;
+    }
+  }
   return cfg;
 }
 
@@ -238,20 +423,41 @@ function readConditionsFormForSave() {
     },
     models: {
       coupling_mode: couplingMode,
-      breakup_model: "weber_critical",
-      critical_weber_number: parseNumericOrList(f.elements.critical_weber_number.value, "Critical Weber number"),
-      breakup_factor_mean: parseNumericOrList(f.elements.breakup_factor_mean.value, "Breakup factor — mean diameter"),
-      breakup_factor_max: parseNumericOrList(f.elements.breakup_factor_max.value, "Breakup factor — maximum diameter"),
+      breakup_model: f.elements.breakup_model.value,
+      critical_weber_number: parseNumericOrList(f.elements.critical_weber_number.value, "Critical Weber number", { optional: true }),
+      breakup_factor_mean: parseNumericOrList(f.elements.breakup_factor_mean.value, "Breakup factor — mean diameter", { optional: true }),
+      breakup_factor_max: parseNumericOrList(f.elements.breakup_factor_max.value, "Breakup factor — maximum diameter", { optional: true }),
+      khrt_B0: parseNumericOrList(f.elements.khrt_B0.value, "KH wavelength coefficient B₀", { optional: true }),
+      khrt_B1: parseNumericOrList(f.elements.khrt_B1.value, "KH breakup time coefficient B₁", { optional: true }),
+      khrt_Crt: parseNumericOrList(f.elements.khrt_Crt.value, "RT wavelength coefficient C_RT", { optional: true }),
+      liquid_density: parseNumericOrList(f.elements.liquid_density.value, "Liquid density [kg/m³]", { optional: true }),
+      liquid_viscosity: parseNumericOrList(f.elements.liquid_viscosity.value, "Liquid viscosity [Pa·s]", { optional: true }),
     },
   };
   const wetness = parseNumericOrList(f.elements.inlet_wetness.value, "Inlet wetness", { optional: true });
-  if (wetness !== null) cfg.fluid.inlet_wetness = wetness;
+  cfg.fluid.inlet_wetness = wetness; // null when cleared — overrides stale base value in merge
+  const waterMassFlowMode = f.elements.water_mass_flow_mode.value;
   const waterMassFlowRate = parseNumericOrList(
     f.elements.water_mass_flow_rate.value,
     "Water mass flow rate [kg/s]",
     { optional: true },
   );
-  if (waterMassFlowRate !== null) cfg.droplet_injection.water_mass_flow_rate = waterMassFlowRate;
+  const waterMassFlowRatePercent = parseNumericOrList(
+    f.elements.water_mass_flow_rate_percent.value,
+    "Water mass flow rate [% of gas]",
+    { optional: true },
+  );
+  if (waterMassFlowMode === "percent") {
+    cfg.droplet_injection.water_mass_flow_rate = null;
+    if (waterMassFlowRatePercent !== null) {
+      cfg.droplet_injection.water_mass_flow_rate_percent = waterMassFlowRatePercent;
+    }
+  } else {
+    cfg.droplet_injection.water_mass_flow_rate_percent = null;
+    if (waterMassFlowRate !== null) {
+      cfg.droplet_injection.water_mass_flow_rate = waterMassFlowRate;
+    }
+  }
   return cfg;
 }
 
@@ -259,8 +465,11 @@ async function buildRunConfigSnapshot() {
   const current = { ...readConditionsFormForRun(), ...readGridForm() };
   try {
     const existing = await apiFetch(`/api/cases/${encodeURIComponent(activeCaseName)}`);
-    return { ...existing, ...current };
+    const merged = mergeCaseConfigs(existing, current);
+    assertTwoWayMassFlowRequirement(merged);
+    return merged;
   } catch (_e) {
+    assertTwoWayMassFlowRequirement(current);
     return current;
   }
 }
@@ -272,7 +481,7 @@ document.getElementById("btn-save-conditions").addEventListener("click", async (
     const condCfg = readConditionsFormForSave();
     // Merge with existing grid config
     const existing = await apiFetch(`/api/cases/${encodeURIComponent(activeCaseName)}`);
-    const merged = { ...existing, ...condCfg };
+    const merged = mergeCaseConfigs(existing, condCfg);
     await apiFetch(`/api/cases/${encodeURIComponent(activeCaseName)}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -293,13 +502,28 @@ function populateGridForm(cfg) {
   const geo = cfg.geometry || {};
   setFieldValue(f, "x_start", geo.x_start ?? 0);
   setFieldValue(f, "x_end", geo.x_end ?? 0.1);
-  setFieldValue(f, "n_cells", geo.n_cells ?? 100);
+  // Support both current key (n_cells) and legacy key (num_cells).
+  setFieldValue(f, "n_cells", geo.n_cells ?? geo.num_cells ?? 100);
 
   const tbody = document.getElementById("area-table-body");
   tbody.innerHTML = "";
-  const areaDist = geo.area_distribution || {};
-  const xs = areaDist.x || [];
-  const As = areaDist.A || [];
+
+  // Resolve area data from either the current schema (area_distribution) or the
+  // legacy schema (area_table: [{x, A}, ...]).
+  let xs = [];
+  let As = [];
+  const areaDist = geo.area_distribution;
+  if (areaDist && Array.isArray(areaDist.x) && areaDist.x.length > 0) {
+    xs = areaDist.x;
+    As = areaDist.A || [];
+  } else if (Array.isArray(geo.area_table) && geo.area_table.length > 0) {
+    // Legacy format: [{x: ..., A: ...}, ...]
+    geo.area_table.forEach(row => {
+      xs.push(row.x);
+      As.push(row.A);
+    });
+  }
+
   if (xs.length === 0) {
     addAreaRow(0.0, 1e-4);
     addAreaRow(0.05, 6e-5);
@@ -426,7 +650,7 @@ document.getElementById("btn-save-grid").addEventListener("click", async () => {
   try {
     const gridCfg = readGridForm();
     const existing = await apiFetch(`/api/cases/${encodeURIComponent(activeCaseName)}`);
-    const merged = { ...existing, ...gridCfg };
+    const merged = mergeCaseConfigs(existing, gridCfg);
     await apiFetch(`/api/cases/${encodeURIComponent(activeCaseName)}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },

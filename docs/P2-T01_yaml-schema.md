@@ -97,6 +97,7 @@ Representative droplet injection inputs.
 | `droplet_diameter_mean_in` | Yes | number | Initial mean droplet diameter in m |
 | `droplet_diameter_max_in` | Yes | number | Initial maximum droplet diameter in m |
 | `water_mass_flow_rate` | No | number | Optional injected droplet mass flow rate in kg/s |
+| `water_mass_flow_rate_percent` | No | number | Optional injected droplet loading as % of gas mass flow |
 
 ### 6. `models`
 

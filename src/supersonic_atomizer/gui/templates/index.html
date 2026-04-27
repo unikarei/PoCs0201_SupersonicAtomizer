@@ -46,13 +46,13 @@
         <fieldset>
           <legend>Working Fluid</legend>
           <label>Fluid
-            <select name="working_fluid">
+            <select name="working_fluid" onchange="updateInletWetnessState(this.value)">
               <option value="air">Air</option>
               <option value="steam">Steam</option>
             </select>
           </label>
           <label>Inlet wetness (steam only, optional)
-            <input type="text" name="inlet_wetness" inputmode="decimal" placeholder="e.g. 0.05 or 0.0, 0.05" />
+            <input type="text" name="inlet_wetness" inputmode="decimal" placeholder="e.g. 0.05 or 0.0, 0.05" disabled />
           </label>
         </fieldset>
 
@@ -74,8 +74,17 @@
           <label>Initial droplet velocity [m/s]
             <input type="text" name="droplet_velocity_in" inputmode="decimal" required value="10" />
           </label>
-          <label>Water mass flow rate [kg/s] (required for two-way)
+          <label>Water mass flow input mode (required for two-way)
+            <select name="water_mass_flow_mode">
+              <option value="kg_per_s">kg/s</option>
+              <option value="percent">% of gas mass flow</option>
+            </select>
+          </label>
+          <label>Water mass flow rate [kg/s]
             <input type="text" name="water_mass_flow_rate" inputmode="decimal" placeholder="e.g. 0.05" />
+          </label>
+          <label>Water mass flow ratio [% of gas]
+            <input type="text" name="water_mass_flow_rate_percent" inputmode="decimal" placeholder="e.g. 5" />
           </label>
           <label>Mean droplet diameter [m]
             <input type="text" name="droplet_diameter_mean_in" inputmode="decimal" required value="0.00005" />
@@ -97,15 +106,46 @@
 
         <fieldset>
           <legend>Breakup Parameters</legend>
-          <label>Critical Weber number
-            <input type="text" name="critical_weber_number" inputmode="decimal" required value="12" />
-          </label>
-          <label>Breakup factor — mean diameter
-            <input type="text" name="breakup_factor_mean" inputmode="decimal" required value="0.5" />
-          </label>
-          <label>Breakup factor — maximum diameter
-            <input type="text" name="breakup_factor_max" inputmode="decimal" required value="0.5" />
-          </label>
+          <div class="breakup-model-row">
+            <label>Breakup model
+              <select name="breakup_model" onchange="updateBreakupModelState(this.value)">
+                <option value="weber_critical">Weber critical (MVP)</option>
+                <option value="bag_stripping">Bag-stripping (Pilch &amp; Erdman)</option>
+                <option value="khrt">KH-RT hybrid (Reitz)</option>
+              </select>
+            </label>
+            <button type="button" class="help-btn" onclick="showBreakupModelHelp(event)" title="モデルの説明">？</button>
+          </div>
+          <div id="breakup-critical-weber-row">
+            <label>Critical Weber number
+              <input type="text" name="critical_weber_number" inputmode="decimal" value="12" />
+            </label>
+          </div>
+          <div id="breakup-params-weber">
+            <label>Breakup factor — mean diameter
+              <input type="text" name="breakup_factor_mean" inputmode="decimal" value="0.5" />
+            </label>
+            <label>Breakup factor — maximum diameter
+              <input type="text" name="breakup_factor_max" inputmode="decimal" value="0.5" />
+            </label>
+          </div>
+          <div id="breakup-params-khrt" class="hidden">
+            <label>KH wavelength coefficient B₀
+              <input type="text" name="khrt_B0" inputmode="decimal" value="0.61" />
+            </label>
+            <label>KH breakup time coefficient B₁
+              <input type="text" name="khrt_B1" inputmode="decimal" value="40.0" />
+            </label>
+            <label>RT wavelength coefficient C<sub>RT</sub>
+              <input type="text" name="khrt_Crt" inputmode="decimal" value="0.1" />
+            </label>
+            <label>Liquid density [kg/m³]
+              <input type="text" name="liquid_density" inputmode="decimal" value="998.2" />
+            </label>
+            <label>Liquid viscosity [Pa·s]
+              <input type="text" name="liquid_viscosity" inputmode="decimal" value="1.002e-3" />
+            </label>
+          </div>
         </fieldset>
 
         <div class="form-actions">
@@ -205,6 +245,72 @@
     </section>
 
   </main>
+</div>
+
+<!-- ── Breakup Model Help Modal ────────────────────────────────────────────── -->
+<div id="breakup-model-help-modal" class="modal-overlay" onclick="closeBreakupModelHelp(event)">
+  <div class="modal-box" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h3>破砕モデルの説明</h3>
+      <button type="button" class="modal-close-btn" onclick="closeBreakupModelHelp()">✕</button>
+    </div>
+    <div class="modal-body">
+      <section class="model-desc">
+        <h4>Weber critical（Weber 閾値モデル）</h4>
+        <p>
+          局所 Weber 数 We = ρ<sub>g</sub> u<sub>rel</sub>² d / σ が
+          <em>critical_weber_number</em> を超えたら破砕を発生させる最もシンプルなモデルです。<br />
+          破砕後の液滴径は親径に固定係数を掛けて決めます。
+        </p>
+        <ul>
+          <li><strong>critical_weber_number</strong>：破砕判定の閾値 We（デフォルト: 12）</li>
+          <li><strong>breakup_factor_mean</strong>：平均径の縮小係数（例: 0.5 → 半径 50%）</li>
+          <li><strong>breakup_factor_max</strong>：最大径の縮小係数</li>
+        </ul>
+        <p><em>用途: 感度検討・基準ケース確認。パラメータが直感的で分かりやすい。</em></p>
+      </section>
+      <hr />
+      <section class="model-desc">
+        <h4>Bag-stripping（Pilch &amp; Erdman 1987）</h4>
+        <p>
+          Weber 数に応じて5つのレジームを自動判別します。
+          破砕後径は局所流条件から「安定 Weber 平衡径」として計算されます：<br />
+          d<sub>child</sub> = We<sub>crit</sub> · σ / (ρ<sub>g</sub> u<sub>rel</sub>²)
+        </p>
+        <table class="model-table">
+          <thead><tr><th>We 範囲</th><th>レジーム</th></tr></thead>
+          <tbody>
+            <tr><td>We &lt; 12</td><td>安定（破砕なし）</td></tr>
+            <tr><td>12 ≤ We &lt; 18</td><td>振動破砕</td></tr>
+            <tr><td>18 ≤ We &lt; 45</td><td>バッグ破砕</td></tr>
+            <tr><td>45 ≤ We &lt; 351</td><td>剥離・膜薄化</td></tr>
+            <tr><td>We ≥ 351</td><td>壊滅的破砕</td></tr>
+          </tbody>
+        </table>
+        <ul>
+          <li><strong>critical_weber_number</strong>：安定径計算に使う We<sub>crit</sub>（デフォルト: 12）</li>
+        </ul>
+        <p><em>用途: 流れ場に応じて子径が自動変化するため Weber critical より物理的に整合的。</em></p>
+      </section>
+      <hr />
+      <section class="model-desc">
+        <h4>KH-RT hybrid（Reitz 1987 / Beale &amp; Reitz 1999）</h4>
+        <p>
+          KH (Kelvin-Helmholtz) 不安定性による連続剥離と、
+          RT (Rayleigh-Taylor) 不安定性による壊滅的破砕を組み合わせたモデルです。
+          液体物性・ガス物性・スリップ速度から破砕後径を自動計算します。
+        </p>
+        <ul>
+          <li><strong>khrt_B0</strong>：KH 波長係数（デフォルト: 0.61）</li>
+          <li><strong>khrt_B1</strong>：KH 破砕時間係数（デフォルト: 40）</li>
+          <li><strong>khrt_Crt</strong>：RT 波長係数（デフォルト: 0.1）</li>
+          <li><strong>liquid_density</strong>：液体密度 [kg/m³]（デフォルト: 998.2、水 20°C）</li>
+          <li><strong>liquid_viscosity</strong>：液体粘度 [Pa·s]（デフォルト: 1.002×10⁻³）</li>
+        </ul>
+        <p><em>用途: 高速噴霧での液柱・液滴の1次/2次破砕を物理的に表現したいとき。</em></p>
+      </section>
+    </div>
+  </div>
 </div>
 
 <script src="/static/app.js"></script>

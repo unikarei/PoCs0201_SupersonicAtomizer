@@ -68,6 +68,7 @@ class TestRuntimeCaseConfigurationModels(unittest.TestCase):
             droplet_diameter_mean_in=1.5e-4,
             droplet_diameter_max_in=2.5e-4,
             water_mass_flow_rate=None,
+            water_mass_flow_rate_percent=None,
         )
         models = ModelSelectionConfig(
             breakup_factor_mean=None,
@@ -77,6 +78,7 @@ class TestRuntimeCaseConfigurationModels(unittest.TestCase):
 
         self.assertIsNone(fluid.inlet_wetness)
         self.assertIsNone(droplet_injection.water_mass_flow_rate)
+        self.assertIsNone(droplet_injection.water_mass_flow_rate_percent)
         self.assertIsNone(models.breakup_factor_mean)
         self.assertIsNone(models.breakup_factor_max)
         self.assertIsNone(models.steam_property_model)

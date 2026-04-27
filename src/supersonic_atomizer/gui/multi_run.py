@@ -72,6 +72,7 @@ SWEEP_FIELD_SPECS: tuple[SweepFieldSpec, ...] = (
     SweepFieldSpec(("droplet_injection",), "droplet_diameter_mean_in", "droplet_diameter_mean_in"),
     SweepFieldSpec(("droplet_injection",), "droplet_diameter_max_in", "droplet_diameter_max_in"),
     SweepFieldSpec(("droplet_injection",), "water_mass_flow_rate", "water_mass_flow_rate", optional=True),
+    SweepFieldSpec(("droplet_injection",), "water_mass_flow_rate_percent", "water_mass_flow_rate_percent", optional=True),
     SweepFieldSpec(("models", "model_selection"), "critical_weber_number", "critical_weber_number"),
     SweepFieldSpec(("models", "model_selection"), "breakup_factor_mean", "breakup_factor_mean"),
     SweepFieldSpec(("models", "model_selection"), "breakup_factor_max", "breakup_factor_max"),
@@ -130,6 +131,58 @@ def _ensure_solver_compatible_config(raw_config: dict[str, Any]) -> dict[str, An
     config = deepcopy(raw_config)
     if "model_selection" in config and "models" not in config:
         config["models"] = deepcopy(config["model_selection"])
+
+    # Normalize optional numeric model fields so legacy GUI payloads that send
+    # string values (or explicit nulls) remain solver-compatible.
+    models = config.get("models")
+    if isinstance(models, dict):
+        optional_numeric_model_fields = (
+            "critical_weber_number",
+            "breakup_factor_mean",
+            "breakup_factor_max",
+            "khrt_B0",
+            "khrt_B1",
+            "khrt_Crt",
+            "liquid_density",
+            "liquid_viscosity",
+        )
+        for field_name in optional_numeric_model_fields:
+            if field_name not in models:
+                continue
+            value = models[field_name]
+            if value is None:
+                models.pop(field_name, None)
+                continue
+            if isinstance(value, str):
+                text = value.strip()
+                if not text:
+                    models.pop(field_name, None)
+                    continue
+                try:
+                    models[field_name] = float(text)
+                except ValueError:
+                    # Keep non-numeric strings untouched; schema validation will
+                    # raise an explicit, user-facing numeric field error.
+                    pass
+
+    fluid = config.get("fluid")
+    if isinstance(fluid, dict) and fluid.get("inlet_wetness") is None:
+        fluid.pop("inlet_wetness", None)
+
+    # Normalize geometry: convert legacy area_table [{x, A}...] + num_cells to
+    # the current area_distribution format so the schema validator always sees
+    # the expected shape, even when an old case file is used directly.
+    geometry = config.get("geometry")
+    if isinstance(geometry, dict):
+        if "n_cells" not in geometry and "num_cells" in geometry:
+            geometry["n_cells"] = geometry.pop("num_cells")
+        if "area_distribution" not in geometry and "area_table" in geometry:
+            area_table = geometry.pop("area_table")
+            if isinstance(area_table, list) and area_table:
+                xs = [row["x"] for row in area_table if "x" in row]
+                As = [row["A"] for row in area_table if "A" in row]
+                geometry["area_distribution"] = {"type": "table", "x": xs, "A": As}
+
     outputs = deepcopy(config.get("outputs", {}))
     outputs["write_csv"] = False
     outputs["write_json"] = False

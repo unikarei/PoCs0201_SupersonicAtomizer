@@ -148,5 +148,34 @@ class TestRawConfigSchemaValidation(unittest.TestCase):
             validate_raw_config_schema(raw_config)
 
 
+
+    def test_rejects_nonnumeric_water_mass_flow_rate_percent(self) -> None:
+        raw_config = {
+            "fluid": {"working_fluid": "air"},
+            "boundary_conditions": {
+                "Pt_in": 600000.0,
+                "Tt_in": 500.0,
+                "Ps_out": 100000.0,
+            },
+            "geometry": {
+                "x_start": 0.0,
+                "x_end": 0.1,
+                "n_cells": 10,
+                "area_distribution": {
+                    "type": "table",
+                    "x": [0.0, 0.1],
+                    "A": [1.0e-4, 1.2e-4],
+                },
+            },
+            "droplet_injection": {
+                "droplet_velocity_in": 10.0,
+                "droplet_diameter_mean_in": 1.0e-4,
+                "droplet_diameter_max_in": 3.0e-4,
+                "water_mass_flow_rate_percent": "five",
+            },
+        }
+
+        with self.assertRaises(ValueError):
+            validate_raw_config_schema(raw_config)
 if __name__ == "__main__":
     unittest.main()

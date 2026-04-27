@@ -158,6 +158,56 @@ class TestMultiRunParsing:
         assert expanded[0].config["droplet_injection"]["water_mass_flow_rate"] == 0.1
         assert expanded[1].config["droplet_injection"]["water_mass_flow_rate"] == 0.2
 
+    def test_expand_multi_value_config_supports_water_mass_flow_rate_percent_sweep(self):
+        config = _base_gui_config()
+        config["droplet_injection"]["water_mass_flow_rate_percent"] = "2.5, 5.0"
+
+        expanded = expand_multi_value_config(case_name="demo_case", raw_config=config)
+
+        assert len(expanded) == 2
+        assert expanded[0].config["droplet_injection"]["water_mass_flow_rate_percent"] == 2.5
+        assert expanded[1].config["droplet_injection"]["water_mass_flow_rate_percent"] == 5.0
+
+    def test_expand_multi_value_config_normalizes_optional_model_numeric_fields(self):
+        config = _base_gui_config()
+        config["models"]["breakup_model"] = "bag_stripping"
+        config["models"]["khrt_B0"] = "0.61"
+        config["models"]["khrt_B1"] = ""
+        config["models"]["khrt_Crt"] = None
+
+        expanded = expand_multi_value_config(case_name="demo_case", raw_config=config)
+
+        assert len(expanded) == 1
+        models = expanded[0].config["models"]
+        assert models["khrt_B0"] == pytest.approx(0.61)
+        assert "khrt_B1" not in models
+        assert "khrt_Crt" not in models
+
+    def test_expand_multi_value_config_normalizes_legacy_geometry_format(self):
+        config = _base_gui_config()
+        # Replace new-format geometry with legacy format
+        config["geometry"] = {
+            "x_start": 0.0,
+            "x_end": 0.5,
+            "num_cells": 80,
+            "area_table": [
+                {"x": 0.0,  "A": 0.01},
+                {"x": 0.25, "A": 0.005},
+                {"x": 0.5,  "A": 0.01},
+            ],
+        }
+
+        expanded = expand_multi_value_config(case_name="demo_case", raw_config=config)
+
+        assert len(expanded) == 1
+        geo = expanded[0].config["geometry"]
+        assert geo["n_cells"] == 80
+        assert "num_cells" not in geo
+        assert "area_table" not in geo
+        assert geo["area_distribution"]["type"] == "table"
+        assert geo["area_distribution"]["x"] == [0.0, 0.25, 0.5]
+        assert geo["area_distribution"]["A"] == [0.01, 0.005, 0.01]
+
     def test_execute_expanded_runs_writes_solver_compatible_yaml_snapshots(self):
         config = _base_gui_config()
         config["boundary_conditions"]["Pt_in"] = "200000, 230000"
