@@ -106,15 +106,17 @@
 
         <fieldset>
           <legend>Breakup Parameters</legend>
-          <div class="breakup-model-row">
+          <div>
             <label>Breakup model
-              <select name="breakup_model" onchange="updateBreakupModelState(this.value)">
-                <option value="weber_critical">Weber critical (MVP)</option>
-                <option value="bag_stripping">Bag-stripping (Pilch &amp; Erdman)</option>
-                <option value="khrt">KH-RT hybrid (Reitz)</option>
-              </select>
+              <span class="select-with-help">
+                <select name="breakup_model" onchange="updateBreakupModelState(this.value)">
+                  <option value="weber_critical">Weber critical (MVP)</option>
+                  <option value="bag_stripping">Bag-stripping (Pilch &amp; Erdman)</option>
+                  <option value="khrt">KH-RT hybrid (Reitz)</option>
+                </select>
+                <button type="button" id="breakup-model-help-btn" class="help-btn" title="モデルの説明" aria-label="破砕モデルの説明を開く">？</button>
+              </span>
             </label>
-            <button type="button" class="help-btn" onclick="showBreakupModelHelp(event)" title="モデルの説明">？</button>
           </div>
           <div id="breakup-critical-weber-row">
             <label>Critical Weber number
@@ -247,12 +249,12 @@
   </main>
 </div>
 
-<!-- ── Breakup Model Help Modal ────────────────────────────────────────────── -->
-<div id="breakup-model-help-modal" class="modal-overlay" onclick="closeBreakupModelHelp(event)">
-  <div class="modal-box" onclick="event.stopPropagation()">
+<!-- ── Breakup Model Help Dialog ───────────────────────────────────────────── -->
+<dialog id="breakup-model-help-dialog" class="help-dialog" aria-labelledby="breakup-model-help-title">
+  <div class="help-dialog-box">
     <div class="modal-header">
-      <h3>破砕モデルの説明</h3>
-      <button type="button" class="modal-close-btn" onclick="closeBreakupModelHelp()">✕</button>
+      <h3 id="breakup-model-help-title">破砕モデルの説明</h3>
+      <button type="button" id="breakup-model-help-close" class="modal-close-btn" aria-label="閉じる">✕</button>
     </div>
     <div class="modal-body">
       <section class="model-desc">
@@ -311,7 +313,7 @@
       </section>
     </div>
   </div>
-</div>
+</dialog>
 
 <script src="/static/app.js"></script>
 </body>

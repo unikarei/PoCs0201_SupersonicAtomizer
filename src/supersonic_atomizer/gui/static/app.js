@@ -208,19 +208,55 @@ function updateBreakupModelState(model) {
   applyModelDefaults(model);
 }
 
-function showBreakupModelHelp(event) {
-  if (event) {
-    event.preventDefault();
-    event.stopPropagation();
-  }
-  document.getElementById("breakup-model-help-modal").classList.add("open");
-}
-
-function closeBreakupModelHelp(event) {
-  if (event && event.target !== event.currentTarget) {
+function showBreakupModelHelp() {
+  const dialog = document.getElementById("breakup-model-help-dialog");
+  if (!dialog) return;
+  if (typeof dialog.showModal === "function") {
+    if (!dialog.open) {
+      dialog.showModal();
+    }
     return;
   }
-  document.getElementById("breakup-model-help-modal").classList.remove("open");
+  dialog.setAttribute("open", "open");
+}
+
+function closeBreakupModelHelp() {
+  const dialog = document.getElementById("breakup-model-help-dialog");
+  if (!dialog) return;
+  if (typeof dialog.close === "function") {
+    if (dialog.open) {
+      dialog.close();
+    }
+    return;
+  }
+  dialog.removeAttribute("open");
+}
+
+function initializeBreakupHelpDialog() {
+  const openButton = document.getElementById("breakup-model-help-btn");
+  const closeButton = document.getElementById("breakup-model-help-close");
+  const dialog = document.getElementById("breakup-model-help-dialog");
+  if (!openButton || !closeButton || !dialog) return;
+
+  openButton.addEventListener("click", showBreakupModelHelp);
+  closeButton.addEventListener("click", closeBreakupModelHelp);
+
+  dialog.addEventListener("cancel", event => {
+    event.preventDefault();
+    closeBreakupModelHelp();
+  });
+
+  dialog.addEventListener("click", event => {
+    const rect = dialog.getBoundingClientRect();
+    const clickedBackdrop =
+      event.clientX < rect.left ||
+      event.clientX > rect.right ||
+      event.clientY < rect.top ||
+      event.clientY > rect.bottom;
+    if (clickedBackdrop) {
+      closeBreakupModelHelp();
+    }
+  });
 }
 
 function updateInletWetnessState(fluidValue) {
@@ -741,6 +777,8 @@ function onRunFailed(msg) {
   setStatus(solveStatus, msg, "failure");
   btnRun.disabled = false;
 }
+
+initializeBreakupHelpDialog();
 
 // ── Post tab 1: Graphs ─────────────────────────────────────────────────────
 function renderPlots(fields) {

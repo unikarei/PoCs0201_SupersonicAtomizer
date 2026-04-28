@@ -424,16 +424,11 @@ input:focus, select:focus {
   width: 180px;
 }
 
-/* ── Breakup model row (select + help button inline, button outside label) ── */
-.breakup-model-row {
-  display: flex;
-  align-items: flex-end;
+/* ── Breakup model: select + ? button on same inline row ─────────────────── */
+.select-with-help {
+  display: inline-flex;
+  align-items: center;
   gap: 0.4rem;
-  margin-bottom: 0.7rem;
-}
-
-.breakup-model-row label {
-  margin-bottom: 0;
 }
 
 .field-row {
@@ -463,27 +458,25 @@ input:focus, select:focus {
   color: #fff;
 }
 
-/* ── Breakup model help modal ─────────────────────────────────────────────── */
-.modal-overlay {
-  display: none;
-  position: fixed;
-  inset: 0;
+/* ── Breakup model help dialog ────────────────────────────────────────────── */
+.help-dialog {
+  border: none;
+  padding: 0;
+  background: transparent;
+  max-width: 680px;
+  width: min(680px, 95vw);
+  max-height: 85vh;
+}
+
+.help-dialog::backdrop {
   background: rgba(0, 0, 0, 0.45);
-  align-items: center;
-  justify-content: center;
-  z-index: 9999;
 }
 
-.modal-overlay.open {
-  display: flex;
-}
-
-.modal-box {
+.help-dialog-box {
   background: #fff;
   border-radius: 8px;
   box-shadow: 0 8px 32px rgba(0,0,0,0.25);
-  max-width: 680px;
-  width: 95%;
+  width: 100%;
   max-height: 85vh;
   display: flex;
   flex-direction: column;
