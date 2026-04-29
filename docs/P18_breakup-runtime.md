@@ -61,6 +61,27 @@ When `We ≤ We_crit`, diameters are preserved unchanged.
 - Other names → `ModelSelectionError`
 - Missing factors → `ConfigurationError`
 
+## Taylor Analogy Breakup (TAB)
+
+- `tab` → `TABBreakupModel`
+
+The TAB implementation included in this project is a time-integrated Taylor
+analogy approximation. It evaluates a damped-oscillator response to a
+quasi-steady aerodynamic forcing over an estimated local interaction time
+(`dt`) and triggers breakup when the deformation exceeds a configurable
+threshold. Parameters exposed via `ModelSelectionConfig`:
+
+| Parameter | Description |
+|---|---|
+| `tab_spring_k` | Spring constant `k` [N/m] |
+| `tab_damping_c` | Damping coefficient `c` [kg/s] |
+| `tab_breakup_threshold` | Dimensionless deformation threshold for breakup |
+| `tab_reduction_fraction` | Diameter multiplier applied to child droplets after breakup |
+
+The model is implemented as a conservative, stateless local evaluator and
+is intended as a bridge to a fuller TAB implementation that would maintain
+oscillator state between integration steps.
+
 ## Breakup Integration in Droplet Transport
 
 In `transport_solver.py`, breakup is applied at each axial step **after** the drag-driven velocity update:

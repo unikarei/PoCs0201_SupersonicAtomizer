@@ -72,6 +72,10 @@ class ModelSelectionConfig:
     khrt_Crt: float = 0.1
     liquid_density: float = 998.2
     liquid_viscosity: float = 1.002e-3
+    tab_reduction_fraction: float = 0.5
+    tab_spring_k: float = 1.0e-3
+    tab_damping_c: float = 1.0e-6
+    tab_breakup_threshold: float = 1.0
 
 
 @dataclass(frozen=True, slots=True)

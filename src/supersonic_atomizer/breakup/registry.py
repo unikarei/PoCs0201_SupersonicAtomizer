@@ -9,6 +9,7 @@ from .bag_stripping import BagStrippingBreakupModel
 from .interfaces import BreakupModel
 from .khrt import KHRTBreakupModel
 from .weber_critical import CriticalWeberBreakupModel
+from .tab import TABBreakupModel
 
 
 def select_breakup_model(model_selection: ModelSelectionConfig) -> BreakupModel:
@@ -34,6 +35,15 @@ def select_breakup_model(model_selection: ModelSelectionConfig) -> BreakupModel:
             Crt=model_selection.khrt_Crt,
             liquid_density=model_selection.liquid_density,
             liquid_viscosity=model_selection.liquid_viscosity,
+        )
+
+    if breakup_model_name == "tab":
+        # Time-integrated TAB: map model selection fields into TAB constructor
+        return TABBreakupModel(
+            spring_k=getattr(model_selection, "tab_spring_k", 1.0e-3),
+            damping_c=getattr(model_selection, "tab_damping_c", 1.0e-6),
+            breakup_threshold=getattr(model_selection, "tab_breakup_threshold", 1.0),
+            reduction_fraction=getattr(model_selection, "tab_reduction_fraction", 0.5),
         )
 
     if breakup_model_name == "bag_stripping":

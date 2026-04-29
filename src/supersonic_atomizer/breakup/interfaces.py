@@ -14,6 +14,7 @@ class BreakupModelInputs:
 
     gas_state: GasState
     droplet_state: DropletState
+    dt: float | None = None  # estimated local interaction time (s), may be None
 
 
 class BreakupModel(ABC):

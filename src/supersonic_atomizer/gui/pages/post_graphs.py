@@ -63,7 +63,7 @@ def extract_plot_series(
         ylabel = f"{title} ({unit})" if unit != "-" else f"{title} (-)"
         return {"x": x_disp, "y": y, "ylabel": ylabel, "title": title, "x_label": x_label}
 
-    return {
+    result = {
         "pressure":               _entry(simulation_result.gas_solution.pressure_values,                          "pressure",    "Pressure"),
         "temperature":            _entry(simulation_result.gas_solution.temperature_values,                       "temperature", "Temperature"),
         "working_fluid_velocity": _entry(simulation_result.gas_solution.velocity_values,                          "velocity",    "Working-fluid velocity"),
@@ -73,13 +73,21 @@ def extract_plot_series(
         "droplet_mean_diameter":  _entry(simulation_result.droplet_solution.mean_diameter_values,                 "diameter",    "Droplet mean diameter"),
         "droplet_maximum_diameter": _entry(simulation_result.droplet_solution.maximum_diameter_values,            "diameter",    "Droplet maximum diameter"),
         "Weber_number":           _entry(simulation_result.droplet_solution.weber_number_values,                  None,          "Weber number"),
-        "pressure_over_total":    _entry(
-            [p / float(simulation_result.settings_summary.get("boundary_conditions", {}).get("Pt_in", float(p)))
-             for p in simulation_result.gas_solution.pressure_values],
+    }
+
+    # Optionally include pressure normalized by inlet total pressure when
+    # the run produced boundary-condition metadata. Older unit tests expect
+    # this field to be omitted when settings_summary is empty, so only add
+    # it when a Pt_in value is available.
+    pt_in = simulation_result.settings_summary.get("boundary_conditions", {}).get("Pt_in") if simulation_result.settings_summary else None
+    if pt_in is not None:
+        result["pressure_over_total"] = _entry(
+            [p / float(pt_in) for p in simulation_result.gas_solution.pressure_values],
             None,
             "Pressure / Inlet total pressure",
-        ),
-    }
+        )
+
+    return result
 
 
 def extract_overlay_plot_series(

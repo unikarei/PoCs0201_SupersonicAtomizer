@@ -112,6 +112,7 @@
                 <select name="breakup_model" onchange="updateBreakupModelState(this.value)">
                   <option value="weber_critical">Weber critical (MVP)</option>
                   <option value="bag_stripping">Bag-stripping (Pilch &amp; Erdman)</option>
+                  <option value="tab">TAB (Taylor Analogy Breakup)</option>
                   <option value="khrt">KH-RT hybrid (Reitz)</option>
                 </select>
                 <button type="button" id="breakup-model-help-btn" class="help-btn" title="モデルの説明" aria-label="破砕モデルの説明を開く">？</button>
@@ -146,6 +147,20 @@
             </label>
             <label>Liquid viscosity [Pa·s]
               <input type="text" name="liquid_viscosity" inputmode="decimal" value="1.002e-3" />
+            </label>
+          </div>
+          <div id="breakup-params-tab" class="hidden">
+            <label>TAB reduction fraction
+              <input type="text" name="tab_reduction_fraction" inputmode="decimal" value="0.5" />
+            </label>
+            <label>TAB spring constant (k)
+              <input type="text" name="tab_spring_k" inputmode="decimal" value="0.001" />
+            </label>
+            <label>TAB damping (c)
+              <input type="text" name="tab_damping_c" inputmode="decimal" value="1e-6" />
+            </label>
+            <label>TAB breakup threshold
+              <input type="text" name="tab_breakup_threshold" inputmode="decimal" value="1.0" />
             </label>
           </div>
         </fieldset>
@@ -293,6 +308,23 @@
           <li><strong>critical_weber_number</strong>：安定径計算に使う We<sub>crit</sub>（デフォルト: 12）</li>
         </ul>
         <p><em>用途: 流れ場に応じて子径が自動変化するため Weber critical より物理的に整合的。</em></p>
+      </section>
+      <hr />
+      <section class="model-desc">
+        <h4>TAB（Taylor Analogy Breakup）</h4>
+        <p>
+          TAB は液滴を質点-ばね-ダンパ系（Taylor の類推）として扱い、
+          局所的な空力荷重に対する振動応答を時間積分的に評価して
+          破砕を判定します。GUI では単節点の近似を用いた簡易版を実装しており、
+          局所の有効相互作用時間 `dt` に依存する挙動を表現します。
+        </p>
+        <ul>
+          <li><strong>tab_spring_k</strong>：ばね定数 k [N/m]（モデル感度パラメータ）</li>
+          <li><strong>tab_damping_c</strong>：減衰係数 c [kg/s]</li>
+          <li><strong>tab_breakup_threshold</strong>：破砕判定に使う無次元変形量の閾値</li>
+          <li><strong>tab_reduction_fraction</strong>：破砕後の径へ掛ける縮小係数（例: 0.5）</li>
+        </ul>
+        <p><em>用途: 二次破砕の時間依存性を簡易に評価したい場合。</em></p>
       </section>
       <hr />
       <section class="model-desc">

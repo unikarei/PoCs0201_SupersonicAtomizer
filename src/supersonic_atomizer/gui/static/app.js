@@ -172,6 +172,13 @@ const MODEL_DEFAULTS = {
     liquid_density:   998.2,
     liquid_viscosity: 1.002e-3,
   },
+  tab: {
+    critical_weber_number: 12,
+    tab_reduction_fraction: 0.5,
+    tab_spring_k: 0.001,
+    tab_damping_c: 1.0e-6,
+    tab_breakup_threshold: 1.0,
+  },
 };
 
 // Fill any empty numeric field in the conditions-form with a default value.
@@ -191,19 +198,33 @@ function updateBreakupModelState(model) {
   const weberRow  = document.getElementById("breakup-critical-weber-row");
   const weberSection = document.getElementById("breakup-params-weber");
   const khrtSection  = document.getElementById("breakup-params-khrt");
+  const tabSection   = document.getElementById("breakup-params-tab");
   if (model === "khrt") {
     weberRow.classList.add("hidden");
     weberSection.classList.add("hidden");
     khrtSection.classList.remove("hidden");
+    tabSection.classList.add("hidden");
   } else if (model === "bag_stripping") {
     weberRow.classList.remove("hidden");
     weberSection.classList.add("hidden");
     khrtSection.classList.add("hidden");
+    tabSection.classList.add("hidden");
+  } else if (model === "tab") {
+    // Show critical Weber and TAB-specific params
+    weberRow.classList.remove("hidden");
+    weberSection.classList.add("hidden");
+    khrtSection.classList.add("hidden");
+    tabSection.classList.remove("hidden");
+    // fill defaults for new tab fields
+    setFieldValue(f, "tab_spring_k", MODEL_DEFAULTS.tab.tab_spring_k);
+    setFieldValue(f, "tab_damping_c", MODEL_DEFAULTS.tab.tab_damping_c);
+    setFieldValue(f, "tab_breakup_threshold", MODEL_DEFAULTS.tab.tab_breakup_threshold);
   } else {
     // weber_critical
     weberRow.classList.remove("hidden");
     weberSection.classList.remove("hidden");
     khrtSection.classList.add("hidden");
+    tabSection.classList.add("hidden");
   }
   applyModelDefaults(model);
 }
@@ -468,6 +489,10 @@ function readConditionsFormForSave() {
       khrt_Crt: parseNumericOrList(f.elements.khrt_Crt.value, "RT wavelength coefficient C_RT", { optional: true }),
       liquid_density: parseNumericOrList(f.elements.liquid_density.value, "Liquid density [kg/m³]", { optional: true }),
       liquid_viscosity: parseNumericOrList(f.elements.liquid_viscosity.value, "Liquid viscosity [Pa·s]", { optional: true }),
+      tab_reduction_fraction: parseNumericOrList(f.elements.tab_reduction_fraction.value, "TAB reduction fraction", { optional: true }),
+      tab_spring_k: parseNumericOrList(f.elements.tab_spring_k.value, "TAB spring constant (k)", { optional: true }),
+      tab_damping_c: parseNumericOrList(f.elements.tab_damping_c.value, "TAB damping (c)", { optional: true }),
+      tab_breakup_threshold: parseNumericOrList(f.elements.tab_breakup_threshold.value, "TAB breakup threshold", { optional: true }),
     },
   };
   const wetness = parseNumericOrList(f.elements.inlet_wetness.value, "Inlet wetness", { optional: true });

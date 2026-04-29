@@ -24,6 +24,7 @@ def _apply_breakup_model(
     gas_state,
     droplet_state: DropletState,
     breakup_model: BreakupModel,
+    dt: float | None = None,
 ) -> DropletState:
     """Apply the configured breakup model to the updated local droplet state."""
 
@@ -31,6 +32,7 @@ def _apply_breakup_model(
         BreakupModelInputs(
             gas_state=gas_state,
             droplet_state=droplet_state,
+            dt=dt,
         )
     )
     final_state = replace(
@@ -131,10 +133,16 @@ def solve_droplet_transport(
                 distribution_sigma=distribution_sigma,
             )
             if breakup_model is not None:
+                # Compute a local dt estimate mapping axial dx -> time using
+                # local gas velocity as transport velocity. Guard against
+                # zero velocities with a small floor value.
+                transport_velocity = max(abs(gas_state.velocity), 1.0e-9)
+                dt_value = max(dx_value / transport_velocity, 1.0e-12)
                 updated_state = _apply_breakup_model(
                     gas_state=gas_state,
                     droplet_state=updated_state,
                     breakup_model=breakup_model,
+                    dt=dt_value,
                 )
                 smd_diameter, diameter_stddev = compute_distribution_moments(
                     mean_diameter=updated_state.mean_diameter,

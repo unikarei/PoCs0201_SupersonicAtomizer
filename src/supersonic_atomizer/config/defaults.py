@@ -61,6 +61,10 @@ def apply_config_defaults(raw_config: dict[str, Any]) -> dict[str, Any]:
     models_section.setdefault("khrt_Crt", 0.1)
     models_section.setdefault("liquid_density", 998.2)
     models_section.setdefault("liquid_viscosity", 1.002e-3)
+    models_section.setdefault("tab_reduction_fraction", 0.5)
+    models_section.setdefault("tab_spring_k", 1.0e-3)
+    models_section.setdefault("tab_damping_c", 1.0e-6)
+    models_section.setdefault("tab_breakup_threshold", 1.0)
 
     outputs_section.setdefault("write_csv", True)
     outputs_section.setdefault("write_json", True)
