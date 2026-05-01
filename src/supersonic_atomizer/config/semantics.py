@@ -113,6 +113,18 @@ def _validate_droplet_injection(raw_config: dict[str, Any]) -> None:
             "droplet_injection.water_mass_flow_rate_percent",
         )
 
+    injection_mode = droplet_injection.get("injection_mode", "droplet_injection")
+    if injection_mode not in {"droplet_injection", "liquid_jet_injection"}:
+        raise ValueError("Field 'droplet_injection.injection_mode' must be 'droplet_injection' or 'liquid_jet_injection'.")
+
+    if injection_mode == "liquid_jet_injection":
+        # Basic sanity checks for liquid-jet inputs when selected
+        for field in ("liquid_jet_diameter", "liquid_mass_flow_rate", "liquid_velocity", "liquid_density", "liquid_viscosity", "surface_tension"):
+            value = droplet_injection.get(field)
+            if value is None:
+                raise ValueError(f"Field 'droplet_injection.{field}' is required when injection_mode is 'liquid_jet_injection'.")
+            _require_positive(value, f"droplet_injection.{field}")
+
 
 def _validate_models(raw_config: dict[str, Any]) -> None:
     models = raw_config.get("models", {})
@@ -149,9 +161,9 @@ def _validate_models(raw_config: dict[str, Any]) -> None:
         _require_positive(breakup_factor_max, "models.breakup_factor_max")
 
     breakup_model = models.get("breakup_model", "weber_critical")
-    if breakup_model not in {"weber_critical", "khrt", "bag_stripping"}:
+    if breakup_model not in {"weber_critical", "khrt", "bag_stripping", "tab"}:
         raise ValueError(
-            "Field 'models.breakup_model' must be 'weber_critical', 'khrt', or 'bag_stripping'."
+            "Field 'models.breakup_model' must be 'weber_critical', 'khrt', 'bag_stripping', or 'tab'."
         )
 
     for param_name in ("khrt_B0", "khrt_B1", "khrt_Crt", "liquid_density", "liquid_viscosity"):

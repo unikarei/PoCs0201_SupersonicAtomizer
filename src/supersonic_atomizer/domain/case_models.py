@@ -40,12 +40,22 @@ class GeometryConfig:
 @dataclass(frozen=True, slots=True)
 class DropletInjectionConfig:
     """Validated representative droplet-injection inputs."""
-
     droplet_velocity_in: float
     droplet_diameter_mean_in: float
     droplet_diameter_max_in: float
     water_mass_flow_rate: float | None = None
     water_mass_flow_rate_percent: float | None = None
+    injection_mode: str = "droplet_injection"
+    # Liquid-jet specific optional inputs (used when injection_mode == 'liquid_jet_injection')
+    liquid_jet_diameter: float | None = None
+    liquid_mass_flow_rate: float | None = None
+    liquid_velocity: float | None = None
+    liquid_density: float | None = None
+    liquid_viscosity: float | None = None
+    surface_tension: float | None = None
+    primary_breakup_model: str | None = None
+    primary_breakup_coefficient: float | None = None
+    initial_SMD_model: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

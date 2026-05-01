@@ -179,6 +179,23 @@ Responsibilities:
 - maintain optional probabilistic droplet-size moments (e.g., diameter standard deviation and SMD),
 - request breakup decisions from the breakup module.
 
+Additional responsibility: Injection-mode handling
+
+- The Droplet Solver layer shall support two injection modes selected via configuration: `droplet_injection` and `liquid_jet_injection`.
+- `droplet_injection` provides initial droplet parcels directly from case inputs and requires no primary-atomization logic in the solver.
+- `liquid_jet_injection` supplies liquid-jet properties; the architecture shall include a lightweight primary-breakup coordinator that:
+  - computes `L_primary_breakup` from a configurable correlation (uses We_g, Oh_l, Re_l, q, and density ratio as inputs),
+  - for x < L_primary_breakup treats the liquid as an intact core (no droplet parcels),
+  - at x >= L_primary_breakup generates initial droplet parcels using a selectable `initial_SMD_model` and then invokes the standard droplet transport and breakup pipeline.
+- The primary-breakup coordinator must be a small, testable component in the droplet layer (for example `solvers/droplet/primary_breakup.py`) that returns the primary-breakup length and generated SMD parameters and does not perform Lagrangian droplet transport itself.
+
+Integration notes:
+
+- The `primary_breakup` module shall be parameterized by a `primary_breakup_coefficient` to allow tuning and to remain empirical at first implementation.
+- The Droplet Solver shall accept optional `liquid_*` inputs in `DropletInjectionConfig` or a new `LiquidJetConfig` domain model; translation and defaults should be handled in the config layer.
+- The GUI and config translator must expose `injection_mode` and the relevant input fields for the selected mode only.
+
+
 Drag models shall remain isolated in `solvers/droplet/drag_models.py` and must not embed breakup logic or read raw configuration.
 
 Coupling-source extraction shall remain isolated in `solvers/droplet/transport_solver.py` and must not directly mutate gas-side state.

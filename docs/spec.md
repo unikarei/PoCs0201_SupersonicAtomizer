@@ -251,6 +251,43 @@ These items may be considered in later releases only after the MVP is validated.
 | `liquid_density` | Representative droplet liquid density | kg/m³ | Default 998.2 (water at ~20 °C) |
 | `liquid_viscosity` | Representative droplet liquid dynamic viscosity | Pa·s | Default 1.002 × 10⁻³ (water at ~20 °C) |
 
+### 7.3 Injection Mode (New)
+
+The simulator shall support two distinct inlet `injection_mode` options to specify how liquid is introduced at the inlet:
+
+- `droplet_injection` (Droplet injection mode): The inlet provides already-formed droplets. Primary atomization is not modeled. The simulator performs droplet transport, drag, Weber-number evaluation, and secondary breakup modeling. Typical inputs (units SI):
+   - `droplet_diameter_mean_in` (m)
+   - `droplet_diameter_max_in` (m)
+   - `droplet_velocity_in` (m/s)
+   - `water_mass_flow_rate` (kg/s) or `water_mass_flow_rate_percent` (%)
+   - `secondary_breakup_model` (string: e.g., `weber_critical`, `khrt`, `bag_stripping`, `tab`)
+
+- `liquid_jet_injection` (Liquid jet injection mode): The inlet introduces a continuous liquid jet (intact liquid core). Primary atomization is represented via a correlation that estimates a primary-breakup length `L_primary_breakup`; the solver treats the liquid as intact for x < L_primary_breakup and as generated droplets for x >= L_primary_breakup. Typical inputs (units SI):
+   - `liquid_jet_diameter` (m)
+   - `liquid_mass_flow_rate` (kg/s)
+   - `liquid_velocity` (m/s)
+   - `liquid_density` (kg/m^3)
+   - `liquid_viscosity` (Pa·s)
+   - `surface_tension` (N/m)
+   - `primary_breakup_model` (string)
+   - `primary_breakup_coefficient` (dimensionless scalar for correlation)
+   - `initial_SMD_model` (string or parameters) — model used to generate initial droplet SMD at breakup
+   - `secondary_breakup_model` (string) — applied after droplet generation
+
+Behavioral rules and notes:
+
+- `injection_mode` is required when liquid is present and defaults to `droplet_injection` for backward compatibility if unspecified.
+- In `droplet_injection` mode, the solver must not attempt primary atomization; droplet initial state is taken from provided inputs.
+- In `liquid_jet_injection` mode, the solver shall compute `L_primary_breakup` using a correlation (function of We_g, Oh_l, Re_l, q, and density ratio). The implementation may start with a simple empirical correlation with a tunable coefficient; the coefficient shall be configurable in the YAML input.
+- Upon reaching x >= L_primary_breakup, the solver shall instantiate droplet parcels using the chosen `initial_SMD_model` and hand those parcels to the droplet transport layer; thereafter the secondary-breakup path proceeds as in `droplet_injection`.
+- Secondary breakup decision remains model-driven (Weber-based trigger, KHRT, TAB, etc.). All breakup model parameters are unchanged by the injection mode.
+
+Output requirements for injection behavior:
+
+- When `liquid_jet_injection` is used, the simulation outputs must include `primary_breakup_length` (m), `generated_initial_SMD` (m), and `Weber_at_breakup` (dimensionless) in the `settings_summary` or diagnostics.
+- Both modes must surface `model_validity_warnings` when input parameter combinations fall outside the empirical model validity (for example extreme Ohnesorge numbers for which the primary-breakup correlation is not validated).
+
+
 ### 7.3 Input Format Requirements
 
 - Input shall be provided through YAML.

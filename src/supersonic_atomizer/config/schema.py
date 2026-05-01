@@ -122,6 +122,12 @@ def _validate_droplet_injection(raw_config: dict[str, Any]) -> None:
     _require_number(droplet_section, "droplet_injection", "droplet_velocity_in")
     _require_number(droplet_section, "droplet_injection", "droplet_diameter_mean_in")
     _require_number(droplet_section, "droplet_injection", "droplet_diameter_max_in")
+    if "injection_mode" in droplet_section and not isinstance(droplet_section["injection_mode"], str):
+        raise ValueError("Field 'droplet_injection.injection_mode' must be a string when supplied.")
+    # Optional liquid-jet fields (validated when present)
+    for field in ("liquid_jet_diameter", "liquid_mass_flow_rate", "liquid_velocity", "liquid_density", "liquid_viscosity", "surface_tension", "primary_breakup_coefficient"):
+        if field in droplet_section and not _is_number(droplet_section[field]):
+            raise ValueError(f"Field 'droplet_injection.{field}' must be numeric when supplied.")
     if "water_mass_flow_rate" in droplet_section and not _is_number(
         droplet_section["water_mass_flow_rate"]
     ):

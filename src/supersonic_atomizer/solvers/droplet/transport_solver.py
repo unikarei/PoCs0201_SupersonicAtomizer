@@ -17,6 +17,7 @@ from supersonic_atomizer.solvers.droplet.updates import (
     initialize_droplet_state,
     update_droplet_state,
 )
+from supersonic_atomizer.solvers.droplet.primary_breakup import estimate_from_config
 
 
 def _apply_breakup_model(
@@ -110,51 +111,127 @@ def solve_droplet_transport(
             message="Droplet transport requires a non-empty aligned gas solution.",
         )
 
-    states: list[DropletState] = [
-        initialize_droplet_state(
-            gas_state=gas_solution.states[0],
-            injection_config=injection_config,
-            drag_model=selected_drag_model,
-            distribution_model=distribution_model,
-            distribution_sigma=distribution_sigma,
+    # Handle injection modes: droplet_injection vs liquid_jet_injection
+    injection_mode = injection_config.injection_mode or "droplet_injection"
+
+    states: list[DropletState] = []
+    first_gas = gas_solution.states[0]
+    if injection_mode == "droplet_injection":
+        states.append(
+            initialize_droplet_state(
+                gas_state=first_gas,
+                injection_config=injection_config,
+                drag_model=selected_drag_model,
+                distribution_model=distribution_model,
+                distribution_sigma=distribution_sigma,
+            )
         )
-    ]
+        jet_active = False
+        primary_breakup_result = None
+    else:
+        # Estimate primary-breakup length using inlet gas state and config
+        primary_breakup_result = estimate_from_config(injection_config=injection_config, gas_state=first_gas)
+        L_primary = primary_breakup_result.L_primary_breakup
+        # Represent intact liquid-jet as placeholder DropletState entries until L_primary
+        jet_active = True
+        jet_mean_d = injection_config.liquid_jet_diameter
+        jet_vel = injection_config.liquid_velocity
+        initial_jet_state = DropletState(
+            x=first_gas.x,
+            velocity=jet_vel,
+            slip_velocity=first_gas.velocity - jet_vel,
+            mean_diameter=jet_mean_d,
+            maximum_diameter=jet_mean_d,
+            weber_number=0.0,
+            smd_diameter=None,
+            diameter_stddev=None,
+            reynolds_number=None,
+            breakup_triggered=False,
+        )
+        states.append(initial_jet_state)
 
     for index in range(1, len(gas_solution.states)):
         gas_state = gas_solution.states[index]
         dx_value = gas_solution.x_values[index] - gas_solution.x_values[index - 1]
         try:
-            updated_state = update_droplet_state(
-                previous_state=states[-1],
-                gas_state=gas_state,
-                dx_value=dx_value,
-                drag_model=selected_drag_model,
-                distribution_model=distribution_model,
-                distribution_sigma=distribution_sigma,
-            )
-            if breakup_model is not None:
-                # Compute a local dt estimate mapping axial dx -> time using
-                # local gas velocity as transport velocity. Guard against
-                # zero velocities with a small floor value.
-                transport_velocity = max(abs(gas_state.velocity), 1.0e-9)
-                dt_value = max(dx_value / transport_velocity, 1.0e-12)
-                updated_state = _apply_breakup_model(
+            # If jet is active, check for primary-breakup location
+            if jet_active:
+                if gas_state.x < primary_breakup_result.L_primary_breakup:
+                    # remain in intact-jet region: append placeholder state with updated x
+                    jet_state = replace(states[-1], x=gas_state.x)
+                    states.append(jet_state)
+                    continue
+                else:
+                    # Transition: generate initial droplets at this axial location
+                    gen_mean = primary_breakup_result.generated_mean_diameter
+                    gen_max = primary_breakup_result.generated_maximum_diameter
+                    # initial droplet velocity set to liquid jet velocity
+                    droplet_vel = injection_config.liquid_velocity
+                    slip_vel = gas_state.velocity - droplet_vel
+                    smd_diameter, diameter_stddev = compute_distribution_moments(
+                        mean_diameter=gen_mean,
+                        maximum_diameter=gen_max,
+                        distribution_model=distribution_model,
+                        distribution_sigma=distribution_sigma,
+                    )
+                    # estimate reynolds via drag-model evaluation
+                    from supersonic_atomizer.solvers.droplet.drag_models import StandardSphereDragInputs
+
+                    reynolds = selected_drag_model.evaluate(
+                        StandardSphereDragInputs(
+                            gas_density=gas_state.density,
+                            slip_velocity=slip_vel,
+                            droplet_diameter=gen_mean,
+                            dynamic_viscosity=gas_state.thermo_state.dynamic_viscosity or 1.8e-5,
+                        )
+                    ).reynolds_number
+
+                    updated_state = DropletState(
+                        x=gas_state.x,
+                        velocity=droplet_vel,
+                        slip_velocity=slip_vel,
+                        mean_diameter=gen_mean,
+                        maximum_diameter=gen_max,
+                        weber_number=0.0,
+                        smd_diameter=smd_diameter,
+                        diameter_stddev=diameter_stddev,
+                        reynolds_number=reynolds,
+                        breakup_triggered=False,
+                    )
+                    validate_droplet_state(updated_state)
+                    jet_active = False
+            else:
+                updated_state = update_droplet_state(
+                    previous_state=states[-1],
                     gas_state=gas_state,
-                    droplet_state=updated_state,
-                    breakup_model=breakup_model,
-                    dt=dt_value,
-                )
-                smd_diameter, diameter_stddev = compute_distribution_moments(
-                    mean_diameter=updated_state.mean_diameter,
-                    maximum_diameter=updated_state.maximum_diameter,
+                    dx_value=dx_value,
+                    drag_model=selected_drag_model,
                     distribution_model=distribution_model,
                     distribution_sigma=distribution_sigma,
                 )
-                updated_state = replace(
-                    updated_state,
-                    smd_diameter=smd_diameter,
-                    diameter_stddev=diameter_stddev,
-                )
+                if breakup_model is not None:
+                    # Compute a local dt estimate mapping axial dx -> time using
+                    # local gas velocity as transport velocity. Guard against
+                    # zero velocities with a small floor value.
+                    transport_velocity = max(abs(gas_state.velocity), 1.0e-9)
+                    dt_value = max(dx_value / transport_velocity, 1.0e-12)
+                    updated_state = _apply_breakup_model(
+                        gas_state=gas_state,
+                        droplet_state=updated_state,
+                        breakup_model=breakup_model,
+                        dt=dt_value,
+                    )
+                    smd_diameter, diameter_stddev = compute_distribution_moments(
+                        mean_diameter=updated_state.mean_diameter,
+                        maximum_diameter=updated_state.maximum_diameter,
+                        distribution_model=distribution_model,
+                        distribution_sigma=distribution_sigma,
+                    )
+                    updated_state = replace(
+                        updated_state,
+                        smd_diameter=smd_diameter,
+                        diameter_stddev=diameter_stddev,
+                    )
         except Exception as exc:
             raise_droplet_solver_failure(
                 category="State-consistency checks" if breakup_model is None else "Transport/breakup checks",
@@ -170,6 +247,16 @@ def solve_droplet_transport(
         droplet_states=aligned_states,
         water_mass_flow_rate=injection_config.water_mass_flow_rate,
     )
+
+    # Add primary-breakup diagnostics when present
+    extra_messages = ()
+    if primary_breakup_result is not None:
+        extra_messages = (
+            f"primary_breakup_length={primary_breakup_result.L_primary_breakup:.6e}",
+            f"generated_mean_diameter={primary_breakup_result.generated_mean_diameter:.6e}",
+            f"generated_maximum_diameter={primary_breakup_result.generated_maximum_diameter:.6e}",
+            f"weber_at_breakup={primary_breakup_result.weber_at_breakup:.6e}",
+        )
 
     return DropletSolution(
         states=aligned_states,
@@ -192,6 +279,6 @@ def solve_droplet_transport(
                 else "Droplet transport and breakup evaluation completed across all axial nodes.",
                 f"distribution_model={distribution_model}",
                 "coupling_sources=estimated",
-            ),
+            ) + extra_messages,
         ),
     )

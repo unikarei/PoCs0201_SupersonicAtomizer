@@ -87,6 +87,26 @@ Phase 2 is done when YAML input structure, internal case models, and result/diag
 
 ---
 
+### New Feature: Injection Mode (Droplet vs Liquid-Jet)
+
+These tasks implement the SDD-driven Injection Mode feature described in `docs/spec.md`.
+
+- [x] **P2-T08 — Add `injection_mode` to raw YAML schema and validation**
+  - **Purpose:** Allow `injection_mode` with allowed values `droplet_injection` and `liquid_jet_injection` in the raw schema.
+  - **Dependencies:** P2-T01, P2-T02.
+  - **Completion criteria:** `config/schema.py` accepts `injection_mode` as an optional string and validates required fields for each mode.
+
+- [x] **P2-T09 — Extend semantic validation for mode-specific checks**
+  - **Purpose:** Add semantic checks that ensure required fields for the selected `injection_mode` are present and physically consistent.
+  - **Dependencies:** P2-T02, P2-T08.
+  - **Completion criteria:** `config/semantics.py` validates `liquid_jet` inputs (positive diameter, positive mass flow, sensible surface tension) when `liquid_jet_injection` is selected and validates droplet inputs for `droplet_injection`.
+
+- [x] **P2-T10 — Add domain models for liquid-jet inputs and injection mode**
+  - **Purpose:** Add `LiquidJetConfig` and extend `DropletInjectionConfig`/`ModelSelectionConfig` to include `injection_mode` and primary-breakup parameters.
+  - **Dependencies:** P2-T03.
+  - **Completion criteria:** `domain/case_models.py` contains typed models for liquid-jet properties and `CaseConfig` includes them.
+
+
 ## Phase 3. Geometry and Grid
 
 ### Definition of Done
@@ -238,6 +258,17 @@ Phase 6 is done when the representative droplet transport model is fully specifi
   - **Completion criteria:** Checks are documented for negative velocity where invalid, negative diameter, NaN values, and inconsistent droplet metrics.
 
 - [x] **P6-T07 — Define droplet transport validation cases**
+
+- [x] **P6-T08 — Implement primary-breakup coordinator and Liquid-Jet handling**
+  - **Purpose:** Implement `solvers/droplet/primary_breakup.py` that computes `L_primary_breakup` from configurable correlation(s) and produces generated initial-SMD parameters.
+  - **Dependencies:** P2-T10, P6-T01.
+  - **Completion criteria:** Primary-breakup coordinator returns numeric `L_primary_breakup` and generated SMD given `liquid_jet` inputs and available gas-state approximations; unit tests validate expected scaling behavior for representative inputs.
+
+- [x] **P6-T09 — Integrate injection-mode logic in droplet transport solver**
+  - **Purpose:** Update `solvers/droplet/transport_solver.py` to accept `injection_mode` and, when `liquid_jet_injection` is selected, skip droplet transport until `L_primary_breakup` and then instantiate parcels.
+  - **Dependencies:** P6-T08, P6-T01.
+  - **Completion criteria:** Both `droplet_injection` and `liquid_jet_injection` execute without errors on minimal example cases; integration tests added.
+
   - **Purpose:** Establish baseline validation before breakup effects are enabled.
   - **Dependencies:** P6-T01, P6-T02, P6-T05.
   - **Completion criteria:** Validation definitions exist for zero-slip or near-zero-slip behavior and a case with expected slip-driven acceleration.
@@ -347,6 +378,16 @@ Phase 9 is done when unit, integration, contract, regression, and validation-ori
   - **Completion criteria:** A fixed set of reference case definitions and tracked outputs is documented.
 
 - [x] **P9-T05 — Define test data organization**
+
+- [x] **P9-T06 — Add unit tests for injection-mode translation and validation**
+  - **Purpose:** Ensure schema/translator/semantic validation behave correctly for both injection modes.
+  - **Dependencies:** P2-T08, P2-T09, P2-T10.
+  - **Completion criteria:** Unit tests cover missing required fields and valid cases for both modes.
+
+- [x] **P9-T07 — Add integration tests covering liquid-jet primary-breakup flow**
+  - **Purpose:** Verify end-to-end path: YAML -> translation -> geometry -> primary-breakup -> droplet generation -> transport for a small synthetic case.
+  - **Dependencies:** P6-T08, P6-T09.
+  - **Completion criteria:** A lightweight integration test runs quickly and asserts `primary_breakup_length` and that downstream droplet fields are present.
   - **Purpose:** Keep test cases, reference results, and validation artifacts manageable.
   - **Dependencies:** P9-T01, P9-T04.
   - **Completion criteria:** The storage and naming conventions for unit fixtures, integration cases, and validation references are documented.

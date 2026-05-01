@@ -55,6 +55,18 @@ def _build_settings_summary(case_config: CaseConfig) -> dict[str, object]:
 			"breakup_factor_max": case_config.models.breakup_factor_max,
 			"steam_property_model": case_config.models.steam_property_model,
 		},
+		"droplet_injection": {
+			"injection_mode": case_config.droplet_injection.injection_mode,
+			"liquid_jet_diameter": case_config.droplet_injection.liquid_jet_diameter,
+			"liquid_mass_flow_rate": case_config.droplet_injection.liquid_mass_flow_rate,
+			"liquid_velocity": case_config.droplet_injection.liquid_velocity,
+			"liquid_density": case_config.droplet_injection.liquid_density,
+			"liquid_viscosity": case_config.droplet_injection.liquid_viscosity,
+			"surface_tension": case_config.droplet_injection.surface_tension,
+			"primary_breakup_model": case_config.droplet_injection.primary_breakup_model,
+			"primary_breakup_coefficient": case_config.droplet_injection.primary_breakup_coefficient,
+			"initial_SMD_model": case_config.droplet_injection.initial_SMD_model,
+		},
 		"outputs": {
 			"output_directory": case_config.outputs.output_directory,
 			"write_csv": case_config.outputs.write_csv,

@@ -71,6 +71,45 @@
 
         <fieldset>
           <legend>Droplet Injection</legend>
+          <label>Injection mode
+            <select name="injection_mode" id="injection-mode-select">
+              <option value="droplet_injection">Droplet injection</option>
+              <option value="liquid_jet_injection">Liquid-jet injection</option>
+            </select>
+          </label>
+          <div id="liquid-jet-params" class="hidden">
+            <label>Liquid-jet diameter [m]
+              <input type="text" name="liquid_jet_diameter" inputmode="decimal" placeholder="e.g. 0.001" />
+            </label>
+            <label>Liquid mass flow rate [kg/s]
+              <input type="text" name="liquid_mass_flow_rate" inputmode="decimal" placeholder="e.g. 0.05" />
+            </label>
+            <label>Liquid velocity [m/s]
+              <input type="text" name="liquid_velocity" inputmode="decimal" placeholder="e.g. 50" />
+            </label>
+            <label>Liquid density [kg/m³]
+              <input type="text" name="liquid_density" inputmode="decimal" placeholder="e.g. 998.2" />
+            </label>
+            <label>Liquid viscosity [Pa·s]
+              <input type="text" name="liquid_viscosity" inputmode="decimal" placeholder="e.g. 1.0e-3" />
+            </label>
+            <label>Surface tension [N/m]
+              <input type="text" name="surface_tension" inputmode="decimal" placeholder="e.g. 0.072" />
+            </label>
+            <label>Primary breakup model
+              <select name="primary_breakup_model">
+                <option value="empirical">Empirical (L = C d sqrt(We))</option>
+              </select>
+            </label>
+            <label>Primary breakup coefficient
+              <input type="text" name="primary_breakup_coefficient" inputmode="decimal" placeholder="e.g. 10" />
+            </label>
+            <label>Initial SMD model
+              <select name="initial_SMD_model">
+                <option value="fraction_of_jet">Fraction of jet diameter</option>
+              </select>
+            </label>
+          </div>
           <label>Initial droplet velocity [m/s]
             <input type="text" name="droplet_velocity_in" inputmode="decimal" required value="10" />
           </label>
@@ -220,6 +259,10 @@
         <div id="solve-progress" class="hidden">
           <div class="spinner"></div>
           <span>Solver running…</span>
+        </div>
+        <div id="primary-breakup-summary" class="hidden summary-box">
+          <h4>Primary-breakup</h4>
+          <div id="primary-breakup-content">No primary-breakup metrics available.</div>
         </div>
       </div>
     </section>

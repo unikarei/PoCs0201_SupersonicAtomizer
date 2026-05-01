@@ -169,6 +169,54 @@ def _ensure_solver_compatible_config(raw_config: dict[str, Any]) -> dict[str, An
     if isinstance(fluid, dict) and fluid.get("inlet_wetness") is None:
         fluid.pop("inlet_wetness", None)
 
+    # Normalize optional droplet-injection fields so blank/null GUI values do
+    # not become "supplied but non-numeric" schema failures.
+    droplet_injection = config.get("droplet_injection")
+    if isinstance(droplet_injection, dict):
+        optional_numeric_droplet_fields = (
+            "liquid_jet_diameter",
+            "liquid_mass_flow_rate",
+            "liquid_velocity",
+            "liquid_density",
+            "liquid_viscosity",
+            "surface_tension",
+            "primary_breakup_coefficient",
+            "water_mass_flow_rate",
+            "water_mass_flow_rate_percent",
+        )
+        for field_name in optional_numeric_droplet_fields:
+            if field_name not in droplet_injection:
+                continue
+            value = droplet_injection[field_name]
+            if value is None:
+                droplet_injection.pop(field_name, None)
+                continue
+            if isinstance(value, str):
+                text = value.strip()
+                if not text:
+                    droplet_injection.pop(field_name, None)
+                    continue
+                try:
+                    droplet_injection[field_name] = float(text)
+                except ValueError:
+                    # Keep non-numeric strings untouched; schema validation will
+                    # raise an explicit, user-facing numeric field error.
+                    pass
+
+        optional_string_droplet_fields = (
+            "primary_breakup_model",
+            "initial_SMD_model",
+        )
+        for field_name in optional_string_droplet_fields:
+            if field_name not in droplet_injection:
+                continue
+            value = droplet_injection[field_name]
+            if value is None:
+                droplet_injection.pop(field_name, None)
+                continue
+            if isinstance(value, str) and not value.strip():
+                droplet_injection.pop(field_name, None)
+
     # Normalize geometry: convert legacy area_table [{x, A}...] + num_cells to
     # the current area_distribution format so the schema validator always sees
     # the expected shape, even when an old case file is used directly.

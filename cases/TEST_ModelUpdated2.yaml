@@ -60,7 +60,7 @@ outputs:
   generate_plots: true
 models:
   coupling_mode: one_way
-  breakup_model: khrt
+  breakup_model: tab
   critical_weber_number: 12
   breakup_factor_mean: 0.5
   breakup_factor_max: 0.5
@@ -69,3 +69,7 @@ models:
   khrt_Crt: 0.1
   liquid_density: 998.2
   liquid_viscosity: 0.001002
+  tab_reduction_fraction: 0.5
+  tab_spring_k: 0.001
+  tab_damping_c: 1.0e-06
+  tab_breakup_threshold: 1

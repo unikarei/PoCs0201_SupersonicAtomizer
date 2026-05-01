@@ -289,6 +289,28 @@ function updateInletWetnessState(fluidValue) {
   if (!isSteam) input.value = "";
 }
 
+function updateInjectionModeState(mode) {
+  const jetSection = document.getElementById("liquid-jet-params");
+  if (!jetSection) return;
+  if ((mode || "").toLowerCase() === "liquid_jet_injection") {
+    jetSection.classList.remove("hidden");
+  } else {
+    jetSection.classList.add("hidden");
+  }
+}
+
+function assertLiquidJetRequirement(cfg) {
+  const mode = cfg?.droplet_injection?.injection_mode || "droplet_injection";
+  if ((mode || "").toLowerCase() !== "liquid_jet_injection") return;
+  const di = cfg.droplet_injection || {};
+  const missing = [];
+  if (di.liquid_jet_diameter === undefined || di.liquid_jet_diameter === null || String(di.liquid_jet_diameter).trim() === "") missing.push("liquid_jet_diameter");
+  if (di.liquid_velocity === undefined || di.liquid_velocity === null || String(di.liquid_velocity).trim() === "") missing.push("liquid_velocity");
+  if (missing.length) {
+    throw new Error(`Liquid-jet injection requires fields: ${missing.join(", ")}`);
+  }
+}
+
 function populateConditionsForm(cfg) {
   const f = document.getElementById("conditions-form");
   const bc = cfg.boundary_conditions || {};
@@ -304,6 +326,17 @@ function populateConditionsForm(cfg) {
   setFieldValue(f, "Tt_in", bc.Tt_in ?? "");
   setFieldValue(f, "Ps_out", bc.Ps_out ?? "");
   setFieldValue(f, "droplet_velocity_in", di.droplet_velocity_in ?? "");
+  setFieldValue(f, "injection_mode", di.injection_mode ?? "droplet_injection");
+  updateInjectionModeState(di.injection_mode ?? "droplet_injection");
+  setFieldValue(f, "liquid_jet_diameter", di.liquid_jet_diameter ?? "");
+  setFieldValue(f, "liquid_mass_flow_rate", di.liquid_mass_flow_rate ?? "");
+  setFieldValue(f, "liquid_velocity", di.liquid_velocity ?? "");
+  setFieldValue(f, "liquid_density", di.liquid_density ?? "");
+  setFieldValue(f, "liquid_viscosity", di.liquid_viscosity ?? "");
+  setFieldValue(f, "surface_tension", di.surface_tension ?? "");
+  setFieldValue(f, "primary_breakup_model", di.primary_breakup_model ?? "empirical");
+  setFieldValue(f, "primary_breakup_coefficient", di.primary_breakup_coefficient ?? "");
+  setFieldValue(f, "initial_SMD_model", di.initial_SMD_model ?? "fraction_of_jet");
   setFieldValue(f, "water_mass_flow_rate", di.water_mass_flow_rate ?? "");
   setFieldValue(f, "water_mass_flow_rate_percent", di.water_mass_flow_rate_percent ?? "");
   const hasKgPerS = di.water_mass_flow_rate !== undefined && di.water_mass_flow_rate !== null && String(di.water_mass_flow_rate) !== "";
@@ -428,6 +461,16 @@ function readConditionsFormForRun() {
     },
     droplet_injection: {
       droplet_velocity_in:      parseNumericOrList(f.elements.droplet_velocity_in.value, "Initial droplet velocity [m/s]"),
+      injection_mode:           (f.elements.injection_mode && f.elements.injection_mode.value) || "droplet_injection",
+      liquid_jet_diameter:      parseNumericOrList(f.elements.liquid_jet_diameter?.value, "Liquid-jet diameter [m]", { optional: true }),
+      liquid_mass_flow_rate:    parseNumericOrList(f.elements.liquid_mass_flow_rate?.value, "Liquid mass flow rate [kg/s]", { optional: true }),
+      liquid_velocity:          parseNumericOrList(f.elements.liquid_velocity?.value, "Liquid velocity [m/s]", { optional: true }),
+      liquid_density:           parseNumericOrList(f.elements.liquid_density?.value, "Liquid density [kg/m³]", { optional: true }),
+      liquid_viscosity:         parseNumericOrList(f.elements.liquid_viscosity?.value, "Liquid viscosity [Pa·s]", { optional: true }),
+      surface_tension:          parseNumericOrList(f.elements.surface_tension?.value, "Surface tension [N/m]", { optional: true }),
+      primary_breakup_model:    (f.elements.primary_breakup_model && f.elements.primary_breakup_model.value) || null,
+      primary_breakup_coefficient: parseNumericOrList(f.elements.primary_breakup_coefficient?.value, "Primary breakup coefficient", { optional: true }),
+      initial_SMD_model:        (f.elements.initial_SMD_model && f.elements.initial_SMD_model.value) || null,
       droplet_diameter_mean_in: parseNumericOrList(f.elements.droplet_diameter_mean_in.value, "Mean droplet diameter [m]"),
       droplet_diameter_max_in:  parseNumericOrList(f.elements.droplet_diameter_max_in.value, "Maximum droplet diameter [m]"),
     },
@@ -475,6 +518,16 @@ function readConditionsFormForSave() {
     },
     droplet_injection: {
       droplet_velocity_in: parseNumericOrList(f.elements.droplet_velocity_in.value, "Initial droplet velocity [m/s]"),
+      injection_mode:       (f.elements.injection_mode && f.elements.injection_mode.value) || "droplet_injection",
+      liquid_jet_diameter:  parseNumericOrList(f.elements.liquid_jet_diameter?.value, "Liquid-jet diameter [m]", { optional: true }),
+      liquid_mass_flow_rate: parseNumericOrList(f.elements.liquid_mass_flow_rate?.value, "Liquid mass flow rate [kg/s]", { optional: true }),
+      liquid_velocity:      parseNumericOrList(f.elements.liquid_velocity?.value, "Liquid velocity [m/s]", { optional: true }),
+      liquid_density:       parseNumericOrList(f.elements.liquid_density?.value, "Liquid density [kg/m³]", { optional: true }),
+      liquid_viscosity:     parseNumericOrList(f.elements.liquid_viscosity?.value, "Liquid viscosity [Pa·s]", { optional: true }),
+      surface_tension:      parseNumericOrList(f.elements.surface_tension?.value, "Surface tension [N/m]", { optional: true }),
+      primary_breakup_model: (f.elements.primary_breakup_model && f.elements.primary_breakup_model.value) || null,
+      primary_breakup_coefficient: parseNumericOrList(f.elements.primary_breakup_coefficient?.value, "Primary breakup coefficient", { optional: true }),
+      initial_SMD_model:    (f.elements.initial_SMD_model && f.elements.initial_SMD_model.value) || null,
       droplet_diameter_mean_in: parseNumericOrList(f.elements.droplet_diameter_mean_in.value, "Mean droplet diameter [m]"),
       droplet_diameter_max_in: parseNumericOrList(f.elements.droplet_diameter_max_in.value, "Maximum droplet diameter [m]"),
     },
@@ -528,9 +581,11 @@ async function buildRunConfigSnapshot() {
     const existing = await apiFetch(`/api/cases/${encodeURIComponent(activeCaseName)}`);
     const merged = mergeCaseConfigs(existing, current);
     assertTwoWayMassFlowRequirement(merged);
+    assertLiquidJetRequirement(merged);
     return merged;
   } catch (_e) {
     assertTwoWayMassFlowRequirement(current);
+    assertLiquidJetRequirement(current);
     return current;
   }
 }
@@ -543,6 +598,8 @@ document.getElementById("btn-save-conditions").addEventListener("click", async (
     // Merge with existing grid config
     const existing = await apiFetch(`/api/cases/${encodeURIComponent(activeCaseName)}`);
     const merged = mergeCaseConfigs(existing, condCfg);
+    // Validate liquid-jet requirements on save as well
+    assertLiquidJetRequirement(merged);
     await apiFetch(`/api/cases/${encodeURIComponent(activeCaseName)}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -792,6 +849,34 @@ async function onRunCompleted(jobId) {
     renderPlots(fields);
     renderTable(tableRows);
     document.getElementById("btn-download-csv").disabled = false;
+    // Extract primary-breakup metrics from diagnostics messages if present
+    try {
+      const summaryEl = document.getElementById("primary-breakup-summary");
+      const contentEl = document.getElementById("primary-breakup-content");
+      if (!contentEl || !summaryEl) return;
+      const diag = data.diagnostics || data.diagnostics || {};
+      const messages = Array.isArray(diag?.messages) ? diag.messages : (diag?.messages || []);
+      const keys = ["primary_breakup_length", "generated_mean_diameter", "generated_maximum_diameter", "weber_at_breakup"];
+      const found = {};
+      messages.forEach(m => {
+        if (typeof m !== "string") return;
+        keys.forEach(k => {
+          if (m.startsWith(k + "=")) {
+            found[k] = m.split("=")[1];
+          }
+        });
+      });
+      if (Object.keys(found).length === 0) {
+        contentEl.textContent = "No primary-breakup metrics reported.";
+        summaryEl.classList.add("hidden");
+      } else {
+        const lines = keys.filter(k => found[k]).map(k => `${k.replace(/_/g, ' ')}: ${found[k]}`);
+        contentEl.innerHTML = lines.map(l => `<div>${l}</div>`).join("");
+        summaryEl.classList.remove("hidden");
+      }
+    } catch (err) {
+      console.warn("Failed to parse primary-breakup diagnostics:", err);
+    }
   } catch (e) {
     setStatus(solveStatus, "Run completed but failed to fetch results: " + e.message, "failure");
   }
@@ -804,6 +889,11 @@ function onRunFailed(msg) {
 }
 
 initializeBreakupHelpDialog();
+// Wire injection-mode selector show/hide behavior
+const injSelect = document.getElementById("injection-mode-select");
+if (injSelect) {
+  injSelect.addEventListener("change", (ev) => updateInjectionModeState(ev.target.value));
+}
 
 // ── Post tab 1: Graphs ─────────────────────────────────────────────────────
 function renderPlots(fields) {

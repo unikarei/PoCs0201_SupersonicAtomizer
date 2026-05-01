@@ -54,6 +54,16 @@ def _translate_droplet_injection(raw_config: dict[str, Any]) -> DropletInjection
         droplet_diameter_max_in=droplet_section["droplet_diameter_max_in"],
         water_mass_flow_rate=droplet_section.get("water_mass_flow_rate"),
         water_mass_flow_rate_percent=droplet_section.get("water_mass_flow_rate_percent"),
+        injection_mode=droplet_section.get("injection_mode", "droplet_injection"),
+        liquid_jet_diameter=droplet_section.get("liquid_jet_diameter"),
+        liquid_mass_flow_rate=droplet_section.get("liquid_mass_flow_rate"),
+        liquid_velocity=droplet_section.get("liquid_velocity"),
+        liquid_density=droplet_section.get("liquid_density"),
+        liquid_viscosity=droplet_section.get("liquid_viscosity"),
+        surface_tension=droplet_section.get("surface_tension"),
+        primary_breakup_model=droplet_section.get("primary_breakup_model"),
+        primary_breakup_coefficient=droplet_section.get("primary_breakup_coefficient"),
+        initial_SMD_model=droplet_section.get("initial_SMD_model"),
     )
 
 

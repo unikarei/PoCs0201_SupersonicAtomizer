@@ -183,6 +183,25 @@ class TestMultiRunParsing:
         assert "khrt_B1" not in models
         assert "khrt_Crt" not in models
 
+    def test_expand_multi_value_config_drops_blank_optional_liquid_jet_fields(self):
+        config = _base_gui_config()
+        config["droplet_injection"]["injection_mode"] = "droplet_injection"
+        config["droplet_injection"]["liquid_jet_diameter"] = None
+        config["droplet_injection"]["liquid_mass_flow_rate"] = ""
+        config["droplet_injection"]["liquid_velocity"] = "   "
+        config["droplet_injection"]["surface_tension"] = "0.072"
+        config["droplet_injection"]["primary_breakup_model"] = ""
+
+        expanded = expand_multi_value_config(case_name="demo_case", raw_config=config)
+
+        assert len(expanded) == 1
+        di = expanded[0].config["droplet_injection"]
+        assert "liquid_jet_diameter" not in di
+        assert "liquid_mass_flow_rate" not in di
+        assert "liquid_velocity" not in di
+        assert di["surface_tension"] == pytest.approx(0.072)
+        assert "primary_breakup_model" not in di
+
     def test_expand_multi_value_config_normalizes_legacy_geometry_format(self):
         config = _base_gui_config()
         # Replace new-format geometry with legacy format
