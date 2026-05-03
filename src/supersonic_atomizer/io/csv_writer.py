@@ -1,8 +1,13 @@
-"""Runtime CSV serialization for structured simulation results."""
+"""Runtime CSV serialization for structured simulation results.
+
+CSV files now include a leading comment line with a JSON map of column units
+to make downstream tooling and users aware of the stored SI units.
+"""
 
 from __future__ import annotations
 
 import csv
+import json
 from pathlib import Path
 
 from supersonic_atomizer.common import OutputError
@@ -45,6 +50,26 @@ def write_simulation_result_csv(simulation_result: SimulationResult, csv_path: s
 	try:
 		resolved_path.parent.mkdir(parents=True, exist_ok=True)
 		with resolved_path.open("w", encoding="utf-8", newline="") as handle:
+			# Write a single-unit metadata comment as the first line. This is a
+			# human-friendly hint and machine-parsable JSON when the consumer
+			# understands the '# UNITS:' prefix.
+			units_map = {
+				"x": "m",
+				"A": "m^2",
+				"pressure": "Pa",
+				"temperature": "K",
+				"density": "kg/m^3",
+				"working_fluid_velocity": "m/s",
+				"Mach_number": "-",
+				"droplet_velocity": "m/s",
+				"slip_velocity": "m/s",
+				"droplet_mean_diameter": "m",
+				"droplet_maximum_diameter": "m",
+				"Weber_number": "-",
+				"breakup_flag": "bool",
+				"droplet_reynolds_number": "-",
+			}
+			handle.write(f"# UNITS: {json.dumps(units_map)}\n")
 			writer = csv.DictWriter(handle, fieldnames=CSV_COLUMNS)
 			writer.writeheader()
 			for index, x_value in enumerate(simulation_result.gas_solution.x_values):

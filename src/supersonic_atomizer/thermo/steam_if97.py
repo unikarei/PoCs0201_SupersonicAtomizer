@@ -5,7 +5,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 import math
 
-from iapws import IAPWS97
+try:
+    from iapws import IAPWS97  # optional runtime dependency
+except Exception:  # pragma: no cover - optional dependency may be absent in some test envs
+    IAPWS97 = None
 
 from supersonic_atomizer.common import ThermoError
 from supersonic_atomizer.domain import ThermoState
@@ -55,6 +58,8 @@ class IF97SteamThermoProvider(ThermoProvider):
             )
 
         try:
+            if IAPWS97 is None:
+                raise RuntimeError("iapws library is not installed; IF97 provider unavailable.")
             state = IAPWS97(P=pressure / 1_000_000.0, T=temperature)
         except Exception as exc:  # pragma: no cover
             raise ThermoError(f"IF97 steam provider failed to evaluate state: {exc}") from exc

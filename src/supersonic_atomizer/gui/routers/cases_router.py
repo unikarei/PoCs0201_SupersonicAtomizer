@@ -276,7 +276,7 @@ async def export_project_case(project: str, name: str) -> PlainTextResponse:
 
 
 @router.get("/projects/{project}/cases/{name}/last_result")
-async def get_last_result_for_project_case(project: str, name: str) -> dict[str, Any]:
+async def get_last_result_for_project_case(project: str, name: str, state: GUIState = Depends(get_gui_state)) -> dict[str, Any]:
     """Return the most recent completed simulation result for a project case."""
     job_store = get_job_store()
     record = job_store.latest_completed_for_case(_case_ref(project, name))
@@ -288,11 +288,13 @@ async def get_last_result_for_project_case(project: str, name: str) -> dict[str,
     plot_fields: list[str] = []
     run_count = 1
 
+    prefs = state.unit_preferences()
+
     if isinstance(record.result, MultiRunSimulationResult):
         labeled_results = list(record.result.labeled_simulation_results())
         if not labeled_results:
             raise HTTPException(status_code=409, detail="Simulation result is not available.")
-        overlay_series = extract_overlay_plot_series(labeled_results, None)
+        overlay_series = extract_overlay_plot_series(labeled_results, prefs)
         for field, data in overlay_series.items():
             fig, ax = plt.subplots(figsize=(6.5, 3.5))
             for line in data["series"]:
@@ -306,7 +308,7 @@ async def get_last_result_for_project_case(project: str, name: str) -> dict[str,
             plt.tight_layout()
             plots[field] = figure_to_base64(fig)
             plt.close(fig)
-        table_rows = aggregate_result_to_table_rows(labeled_results, None)
+        table_rows = aggregate_result_to_table_rows(labeled_results, prefs)
         plot_fields = list(overlay_series.keys())
         run_count = record.result.run_count
     else:
@@ -314,7 +316,7 @@ async def get_last_result_for_project_case(project: str, name: str) -> dict[str,
         if run_result is None or run_result.simulation_result is None:
             raise HTTPException(status_code=409, detail="Simulation result is not available.")
         sim_result = run_result.simulation_result
-        series = extract_plot_series(sim_result, None)
+        series = extract_plot_series(sim_result, prefs)
         for field, data in series.items():
             fig, ax = plt.subplots(figsize=(6, 3))
             ax.plot(data["x"], data["y"])
@@ -325,7 +327,7 @@ async def get_last_result_for_project_case(project: str, name: str) -> dict[str,
             plt.tight_layout()
             plots[field] = figure_to_base64(fig)
             plt.close(fig)
-        table_rows = result_to_table_rows(sim_result, None)
+        table_rows = result_to_table_rows(sim_result, prefs)
         plot_fields = list(series.keys())
 
     csv_content = generate_csv_content(table_rows)
@@ -390,7 +392,7 @@ async def delete_case(name: str) -> None:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 @router.get("/{name}/last_result")
-async def get_last_result_for_case(name: str) -> dict[str, Any]:
+async def get_last_result_for_case(name: str, state: GUIState = Depends(get_gui_state)) -> dict[str, Any]:
     """Return the most recent completed simulation result payload for *name*.
 
     The payload mirrors ``/api/simulation/result/{job_id}`` and contains
@@ -408,11 +410,13 @@ async def get_last_result_for_case(name: str) -> dict[str, Any]:
     plot_fields: list[str] = []
     run_count = 1
 
+    prefs = state.unit_preferences()
+
     if isinstance(record.result, MultiRunSimulationResult):
         labeled_results = list(record.result.labeled_simulation_results())
         if not labeled_results:
             raise HTTPException(status_code=409, detail="Simulation result is not available.")
-        overlay_series = extract_overlay_plot_series(labeled_results, None)
+        overlay_series = extract_overlay_plot_series(labeled_results, prefs)
         for field, data in overlay_series.items():
             fig, ax = plt.subplots(figsize=(6.5, 3.5))
             for line in data["series"]:
@@ -426,7 +430,7 @@ async def get_last_result_for_case(name: str) -> dict[str, Any]:
             plt.tight_layout()
             plots[field] = figure_to_base64(fig)
             plt.close(fig)
-        table_rows = aggregate_result_to_table_rows(labeled_results, None)
+        table_rows = aggregate_result_to_table_rows(labeled_results, prefs)
         plot_fields = list(overlay_series.keys())
         run_count = record.result.run_count
     else:
@@ -434,7 +438,7 @@ async def get_last_result_for_case(name: str) -> dict[str, Any]:
         if run_result is None or run_result.simulation_result is None:
             raise HTTPException(status_code=409, detail="Simulation result is not available.")
         sim_result = run_result.simulation_result
-        series = extract_plot_series(sim_result, None)
+        series = extract_plot_series(sim_result, prefs)
         for field, data in series.items():
             fig, ax = plt.subplots(figsize=(6, 3))
             ax.plot(data["x"], data["y"])
@@ -445,7 +449,7 @@ async def get_last_result_for_case(name: str) -> dict[str, Any]:
             plt.tight_layout()
             plots[field] = figure_to_base64(fig)
             plt.close(fig)
-        table_rows = result_to_table_rows(sim_result, None)
+        table_rows = result_to_table_rows(sim_result, prefs)
         plot_fields = list(series.keys())
 
     csv_content = generate_csv_content(table_rows)

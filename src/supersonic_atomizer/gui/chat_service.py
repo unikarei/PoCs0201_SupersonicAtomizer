@@ -121,6 +121,24 @@ class ChatService:
         final_droplet_velocity = droplet.velocity_values[final_index] if droplet.velocity_values else None
         final_mean_diameter = droplet.mean_diameter_values[final_index] if droplet.mean_diameter_values else None
         breakup_events = sum(1 for flag in droplet.breakup_flags if flag)
+
+        # Small tabular snippet (first few axial points) with SI units to help
+        # the assistant ground answers in concrete values without requiring
+        # the full arrays. Limit to at most 5 rows for brevity.
+        def _table_snippet(n: int = 5) -> str:
+            rows = []
+            headers = ["x [m]", "A [m^2]", "pressure [Pa]", "temperature [K]", "u [m/s]"]
+            rows.append("\t".join(headers))
+            count = min(n, len(gas.x_values))
+            for i in range(count):
+                x = gas.x_values[i]
+                a = gas.area_values[i]
+                p = gas.pressure_values[i]
+                T = gas.temperature_values[i]
+                u = gas.velocity_values[i]
+                rows.append("\t".join(str(v) for v in (x, a, p, T, u)))
+            return "\n".join(rows)
+
         return (
             f"Axial points: {len(gas.x_values)}\n"
             f"Final x [m]: {gas.x_values[final_index] if gas.x_values else 'n/a'}\n"
@@ -131,7 +149,8 @@ class ChatService:
             f"Final Mach number [-]: {final_mach}\n"
             f"Final droplet velocity [m/s]: {final_droplet_velocity}\n"
             f"Final mean droplet diameter [m]: {final_mean_diameter}\n"
-            f"Breakup events flagged: {breakup_events}"
+            f"Breakup events flagged: {breakup_events}\n\n"
+            f"Tabular snippet (first rows):\n{_table_snippet(5)}"
         )
 
     def _call_provider(self, provider: ProviderConfig, messages: list[dict[str, str]]) -> str:

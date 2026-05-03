@@ -60,9 +60,12 @@ class TestRuntimeCsvWriter(unittest.TestCase):
             csv_path = write_simulation_result_csv(simulation_result)
 
             content = Path(csv_path).read_text(encoding="utf-8")
+            # Header should be present after an initial units comment line
             self.assertIn("x,A,pressure,temperature,density,working_fluid_velocity,Mach_number", content)
             self.assertIn("droplet_mean_diameter", content)
             self.assertIn("Weber_number", content)
+            # Check for the units metadata comment written at the top
+            self.assertIn("# UNITS:", content)
 
     def test_requires_destination_when_output_metadata_is_absent(self) -> None:
         simulation_result = _make_result()

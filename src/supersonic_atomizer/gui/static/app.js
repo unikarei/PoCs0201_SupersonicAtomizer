@@ -35,7 +35,6 @@ let chatVoiceListening = false;
 const MIN_LEFT_PANEL_WIDTH = 180;
 const MAX_LEFT_PANEL_WIDTH = 520;
 const MIN_RIGHT_PANEL_WIDTH = 280;
-const MAX_RIGHT_PANEL_WIDTH = 640;
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
 async function apiFetch(url, options = {}) {
@@ -137,7 +136,12 @@ function setLeftPanelWidth(widthPx) {
 }
 
 function setRightPanelWidth(widthPx) {
-  const nextWidth = clamp(widthPx, MIN_RIGHT_PANEL_WIDTH, MAX_RIGHT_PANEL_WIDTH);
+  // Allow the right chat panel to expand up to nearly the full viewport width
+  // while still preserving the left panel minimum. This removes the previous
+  // hard cap so users can make the chat as wide as they need.
+  const viewportWidth = document.documentElement.clientWidth || window.innerWidth;
+  const maxAllowed = Math.max(MIN_RIGHT_PANEL_WIDTH, viewportWidth - MIN_LEFT_PANEL_WIDTH - 40);
+  const nextWidth = clamp(widthPx, MIN_RIGHT_PANEL_WIDTH, maxAllowed);
   document.documentElement.style.setProperty("--right-panel-width", `${nextWidth}px`);
 }
 

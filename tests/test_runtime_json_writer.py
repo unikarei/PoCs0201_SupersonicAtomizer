@@ -63,7 +63,10 @@ class TestRuntimeJsonWriter(unittest.TestCase):
         self.assertIn("settings_summary", payload)
         self.assertIn("numerical_results", payload)
         self.assertIn("diagnostics", payload)
+        # Numerical fields now contain objects with 'values' and 'unit'
         self.assertIn("Weber_number", payload["numerical_results"])
+        self.assertIsInstance(payload["numerical_results"]["Weber_number"], dict)
+        self.assertIn("values", payload["numerical_results"]["Weber_number"])
 
     def test_writes_expected_json_content(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -73,6 +76,7 @@ class TestRuntimeJsonWriter(unittest.TestCase):
             payload = json.loads(Path(json_path).read_text(encoding="utf-8"))
             self.assertEqual(payload["metadata"]["case_name"], "json_case")
             self.assertIn("working_fluid_velocity", payload["numerical_results"])
+            self.assertIn("values", payload["numerical_results"]["working_fluid_velocity"])
 
     def test_requires_destination_when_output_metadata_is_absent(self) -> None:
         simulation_result = _make_result()
