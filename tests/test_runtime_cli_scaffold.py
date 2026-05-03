@@ -8,14 +8,17 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from supersonic_atomizer.app import LavalSweepResult, SimulationRunResult, StartupResult
 from supersonic_atomizer.cli import (
     CLIOptions,
+    build_case_store_migration_parser,
     build_laval_sweep_parser,
     build_parser,
+    format_case_store_migration_report,
     format_laval_sweep_report,
     format_startup_report,
     main,
     parse_cli_args,
     run_cli,
 )
+from supersonic_atomizer.gui.case_store import LegacyCaseMigrationResult
 
 
 class _StubApplicationService:
@@ -74,6 +77,15 @@ class TestRuntimeCliScaffold(unittest.TestCase):
         self.assertEqual(namespace.case_path, "examples/laval_nozzle_air.yaml")
         self.assertEqual(namespace.output_directory, "outputs/custom")
 
+    def test_build_case_store_migration_parser_accepts_optional_flags(self) -> None:
+        parser = build_case_store_migration_parser()
+
+        namespace = parser.parse_args(["--cases-dir", "alt_cases", "--project", "archive", "--dry-run"])
+
+        self.assertEqual(namespace.cases_dir, "alt_cases")
+        self.assertEqual(namespace.project, "archive")
+        self.assertTrue(namespace.dry_run)
+
     def test_main_hands_case_path_to_application_service_boundary(self) -> None:
         application_service = _StubApplicationService()
 
@@ -86,6 +98,14 @@ class TestRuntimeCliScaffold(unittest.TestCase):
         self.assertIsInstance(result, StartupResult)
         self.assertEqual(result.status, "ready")
         self.assertEqual(result.case_path, "startup-case.yaml")
+
+    def test_parse_cli_args_supports_case_store_migration_command(self) -> None:
+        options = parse_cli_args(["migrate-case-store", "--cases-dir", "alt_cases", "--project", "archive", "--dry-run"])
+
+        self.assertEqual(options.command, "migrate-case-store")
+        self.assertEqual(options.cases_dir, "alt_cases")
+        self.assertEqual(options.project_name, "archive")
+        self.assertTrue(options.dry_run)
 
     def test_format_startup_report_distinguishes_configuration_failures(self) -> None:
         startup_result = StartupResult(
@@ -116,6 +136,35 @@ class TestRuntimeCliScaffold(unittest.TestCase):
         self.assertIn("Laval sweep completed", report)
         self.assertIn("validation=pass", report)
         self.assertIn("outputs/report.md", report)
+
+    def test_format_case_store_migration_report_includes_moved_and_skipped(self) -> None:
+        report = format_case_store_migration_report(
+            LegacyCaseMigrationResult(
+                target_project="default",
+                moved_cases=("alpha",),
+                skipped_cases=("beta",),
+            )
+        )
+
+        self.assertIn("project=default", report)
+        self.assertIn("moved=alpha", report)
+        self.assertIn("skipped=beta", report)
+
+    def test_main_supports_case_store_migration_command(self) -> None:
+        with self.subTest("dry run"):
+            import tempfile
+            from pathlib import Path
+
+            with tempfile.TemporaryDirectory() as tmp_dir:
+                cases_dir = Path(tmp_dir) / "cases"
+                cases_dir.mkdir(parents=True)
+                (cases_dir / "legacy.yaml").write_text("fluid:\n  working_fluid: air\n", encoding="utf-8")
+
+                result = main(["migrate-case-store", "--cases-dir", str(cases_dir), "--dry-run"])
+
+                self.assertEqual(result.target_project, "default")
+                self.assertEqual(result.moved_cases, ("legacy",))
+                self.assertTrue((cases_dir / "legacy.yaml").exists())
 
     def test_run_cli_writes_ready_status_to_stdout(self) -> None:
         application_service = _StubApplicationService()

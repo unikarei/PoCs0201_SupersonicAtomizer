@@ -48,6 +48,12 @@ router = APIRouter()
 _bridge = ServiceBridge()
 
 
+def _case_ref(project_name: str | None, case_name: str) -> str:
+    if not project_name:
+        return case_name
+    return f"{project_name}/{case_name}"
+
+
 def _run_job(job_id: str, case_path: str, gui_state: GUIState) -> None:
     """Background thread target — calls the solver and stores the result."""
     job_store = get_job_store()
@@ -89,12 +95,12 @@ async def run_simulation(
     """Start a simulation run in the background and return a job identifier."""
     store = CaseStore()
     try:
-        if not store.exists(body.case_name):
+        if not store.exists(body.case_name, project=body.project_name):
             raise HTTPException(
                 status_code=404,
                 detail=f"Case {body.case_name!r} not found.",
             )
-        case_path = str(store.case_path(body.case_name))
+        case_path = str(store.case_path(body.case_name, project=body.project_name))
     except CaseNameError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -104,7 +110,7 @@ async def run_simulation(
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    job_id = get_job_store().create_job(case_name=body.case_name)
+    job_id = get_job_store().create_job(case_name=_case_ref(body.project_name, body.case_name))
     if body.config:
         thread = threading.Thread(
             target=_run_multi_job,

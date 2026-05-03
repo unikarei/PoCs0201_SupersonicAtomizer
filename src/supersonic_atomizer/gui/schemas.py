@@ -15,8 +15,27 @@ class CaseCreateRequest(BaseModel):
     name: str
 
 
+class ProjectCreateRequest(BaseModel):
+    name: str
+
+
+class CaseDuplicateRequest(BaseModel):
+    new_name: str
+    target_project: str | None = None
+
+
+class CaseRenameRequest(BaseModel):
+    new_name: str
+    target_project: str | None = None
+
+
+class ProjectRenameRequest(BaseModel):
+    new_name: str
+
+
 class RunRequest(BaseModel):
     case_name: str
+    project_name: str | None = None
     config: dict[str, Any] = {}  # optional — case config already saved in CaseStore
 
 

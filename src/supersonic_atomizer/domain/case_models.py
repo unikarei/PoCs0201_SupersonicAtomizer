@@ -40,9 +40,9 @@ class GeometryConfig:
 @dataclass(frozen=True, slots=True)
 class DropletInjectionConfig:
     """Validated representative droplet-injection inputs."""
-    droplet_velocity_in: float
-    droplet_diameter_mean_in: float
-    droplet_diameter_max_in: float
+    droplet_velocity_in: float | None = None
+    droplet_diameter_mean_in: float | None = None
+    droplet_diameter_max_in: float | None = None
     water_mass_flow_rate: float | None = None
     water_mass_flow_rate_percent: float | None = None
     injection_mode: str = "droplet_injection"

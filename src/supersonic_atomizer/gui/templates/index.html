@@ -13,12 +13,31 @@
 
   <!-- Left panel: case management -->
   <aside class="left-panel">
+    <h2>Projects</h2>
+    <label class="sidebar-label" for="project-select">Active project</label>
+    <select id="project-select" class="sidebar-select"></select>
+    <div class="case-actions">
+      <input id="new-project-name" type="text" placeholder="project name" />
+      <button id="btn-new-project">＋ New project</button>
+    </div>
+    <div class="case-actions case-tools">
+      <button id="btn-rename-project" type="button">Rename project</button>
+      <button id="btn-delete-project" type="button">Delete project</button>
+      <button id="btn-export-project" type="button">Export project</button>
+    </div>
+    <hr />
     <h2>Cases</h2>
     <ul id="case-list" class="case-list"></ul>
     <div class="case-actions">
       <input id="new-case-name" type="text" placeholder="case name" />
-      <button id="btn-new-case">＋ New</button>
+      <button id="btn-new-case">＋ New case</button>
       <button id="btn-refresh-cases">↺ Refresh</button>
+    </div>
+    <div class="case-actions case-tools">
+      <button id="btn-rename-case" type="button">Rename case</button>
+      <button id="btn-duplicate-case" type="button">Duplicate case</button>
+      <button id="btn-delete-case" type="button">Delete case</button>
+      <button id="btn-export-case" type="button">Export YAML</button>
     </div>
     <div id="case-error" class="error-msg hidden"></div>
     <hr />
@@ -51,9 +70,11 @@
               <option value="steam">Steam</option>
             </select>
           </label>
-          <label>Inlet wetness (steam only, optional)
-            <input type="text" name="inlet_wetness" inputmode="decimal" placeholder="e.g. 0.05 or 0.0, 0.05" disabled />
-          </label>
+          <div id="inlet-wetness-row" class="hidden">
+            <label>Inlet wetness (steam only, optional)
+              <input type="text" name="inlet_wetness" inputmode="decimal" placeholder="e.g. 0.05 or 0.0, 0.05" />
+            </label>
+          </div>
         </fieldset>
 
         <fieldset>
@@ -78,23 +99,37 @@
             </select>
           </label>
           <div id="liquid-jet-params" class="hidden">
-            <label>Liquid-jet diameter [m]
-              <input type="text" name="liquid_jet_diameter" inputmode="decimal" placeholder="e.g. 0.001" />
+            <label>Liquid material
+              <select name="liquid_material" id="liquid-material-select">
+                <option value="water">Water</option>
+                <option value="custom">Custom</option>
+              </select>
             </label>
-            <label>Liquid mass flow rate [kg/s]
-              <input type="text" name="liquid_mass_flow_rate" inputmode="decimal" placeholder="e.g. 0.05" />
+            <fieldset class="radio-fieldset">
+              <legend>Input basis</legend>
+              <div class="radio-group" id="input-basis-group" role="radiogroup" aria-label="Input basis">
+                <label class="inline-radio"><input type="radio" name="input_basis" value="diameter_based" checked /><span>Diameter-based</span></label>
+                <label class="inline-radio"><input type="radio" name="input_basis" value="mass_flow_based" /><span>Mass-flow-based</span></label>
+              </div>
+            </fieldset>
+            <label id="liquid-jet-diameter-label">Liquid-jet diameter [m]
+              <input id="liquid-jet-diameter-input" type="text" name="liquid_jet_diameter" inputmode="decimal" placeholder="e.g. 0.001" />
+            </label>
+            <label id="liquid-mass-flow-label">Liquid mass flow rate [kg/s]
+              <input id="liquid-mass-flow-input" type="text" name="liquid_mass_flow_rate" inputmode="decimal" placeholder="e.g. 0.05" />
             </label>
             <label>Liquid velocity [m/s]
-              <input type="text" name="liquid_velocity" inputmode="decimal" placeholder="e.g. 50" />
+              <input id="liquid-velocity-input" type="text" name="liquid_velocity" inputmode="decimal" placeholder="e.g. 50" />
             </label>
             <label>Liquid density [kg/m³]
-              <input type="text" name="liquid_density" inputmode="decimal" placeholder="e.g. 998.2" />
+              <input id="liquid-density-input" type="text" name="liquid_density" inputmode="decimal" placeholder="e.g. 998.2" />
             </label>
+            <div id="liquid-jet-calc-note" class="calc-note hidden"></div>
             <label>Liquid viscosity [Pa·s]
-              <input type="text" name="liquid_viscosity" inputmode="decimal" placeholder="e.g. 1.0e-3" />
+              <input type="text" name="liquid_viscosity" inputmode="decimal" placeholder="e.g. 1.0e-3" value="1.002e-3" />
             </label>
             <label>Surface tension [N/m]
-              <input type="text" name="surface_tension" inputmode="decimal" placeholder="e.g. 0.072" />
+              <input type="text" name="surface_tension" inputmode="decimal" placeholder="e.g. 0.072" value="0.072" />
             </label>
             <label>Primary breakup model
               <select name="primary_breakup_model">
@@ -102,7 +137,7 @@
               </select>
             </label>
             <label>Primary breakup coefficient
-              <input type="text" name="primary_breakup_coefficient" inputmode="decimal" placeholder="e.g. 10" />
+              <input type="text" name="primary_breakup_coefficient" inputmode="decimal" placeholder="e.g. 10" value="10" />
             </label>
             <label>Initial SMD model
               <select name="initial_SMD_model">
@@ -110,27 +145,37 @@
               </select>
             </label>
           </div>
-          <label>Initial droplet velocity [m/s]
-            <input type="text" name="droplet_velocity_in" inputmode="decimal" required value="10" />
-          </label>
-          <label>Water mass flow input mode (required for two-way)
-            <select name="water_mass_flow_mode">
-              <option value="kg_per_s">kg/s</option>
-              <option value="percent">% of gas mass flow</option>
-            </select>
-          </label>
-          <label>Water mass flow rate [kg/s]
-            <input type="text" name="water_mass_flow_rate" inputmode="decimal" placeholder="e.g. 0.05" />
-          </label>
-          <label>Water mass flow ratio [% of gas]
-            <input type="text" name="water_mass_flow_rate_percent" inputmode="decimal" placeholder="e.g. 5" />
-          </label>
-          <label>Mean droplet diameter [m]
-            <input type="text" name="droplet_diameter_mean_in" inputmode="decimal" required value="0.00005" />
-          </label>
-          <label>Maximum droplet diameter [m]
-            <input type="text" name="droplet_diameter_max_in" inputmode="decimal" required value="0.0001" />
-          </label>
+          <div id="droplet-initial-conditions-section">
+            <label id="droplet-velocity-row">Initial droplet velocity [m/s]
+              <input type="text" name="droplet_velocity_in" inputmode="decimal" required value="10" />
+            </label>
+          </div>
+          <div id="water-mass-flow-section">
+            <label>Water mass flow input mode
+              <select name="water_mass_flow_mode" id="water-mass-flow-mode-select">
+                <option value="kg_per_s">kg/s</option>
+                <option value="percent">% of gas mass flow</option>
+              </select>
+            </label>
+            <div id="water-mass-flow-kgps-row">
+              <label>Water mass flow rate [kg/s]
+                <input type="text" name="water_mass_flow_rate" inputmode="decimal" placeholder="e.g. 0.05" />
+              </label>
+            </div>
+            <div id="water-mass-flow-percent-row" class="hidden">
+              <label>Water mass flow ratio [% of gas]
+                <input type="text" name="water_mass_flow_rate_percent" inputmode="decimal" placeholder="e.g. 5" />
+              </label>
+            </div>
+          </div>
+          <div id="droplet-size-section">
+            <label>Mean droplet diameter [m]
+              <input type="text" name="droplet_diameter_mean_in" inputmode="decimal" required value="0.00005" />
+            </label>
+            <label>Maximum droplet diameter [m]
+              <input type="text" name="droplet_diameter_max_in" inputmode="decimal" required value="0.0001" />
+            </label>
+          </div>
         </fieldset>
 
         <fieldset>
@@ -182,10 +227,10 @@
               <input type="text" name="khrt_Crt" inputmode="decimal" value="0.1" />
             </label>
             <label>Liquid density [kg/m³]
-              <input type="text" name="liquid_density" inputmode="decimal" value="998.2" />
+              <input type="text" name="khrt_liquid_density" inputmode="decimal" value="998.2" />
             </label>
             <label>Liquid viscosity [Pa·s]
-              <input type="text" name="liquid_viscosity" inputmode="decimal" value="1.002e-3" />
+              <input type="text" name="khrt_liquid_viscosity" inputmode="decimal" value="1.002e-3" />
             </label>
           </div>
           <div id="breakup-params-tab" class="hidden">

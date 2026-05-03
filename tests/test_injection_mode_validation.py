@@ -78,6 +78,13 @@ class TestSchemaInjectionMode:
         raw = _base_raw_config(**_liquid_jet_fields())
         validate_raw_config_schema(raw)
 
+    def test_liquid_jet_injection_without_droplet_fields_passes_schema(self):
+        raw = _base_raw_config(**_liquid_jet_fields())
+        raw["droplet_injection"].pop("droplet_velocity_in")
+        raw["droplet_injection"].pop("droplet_diameter_mean_in")
+        raw["droplet_injection"].pop("droplet_diameter_max_in")
+        validate_raw_config_schema(raw)
+
     def test_injection_mode_non_string_rejected_by_schema(self):
         raw = _base_raw_config(injection_mode=42)
         with pytest.raises(ValueError, match="injection_mode"):
@@ -120,6 +127,13 @@ class TestSemanticsInjectionMode:
     def test_valid_liquid_jet_passes_semantics(self):
         raw = _base_raw_config(**_liquid_jet_fields())
         validate_semantic_config(raw)  # must not raise
+
+    def test_liquid_jet_without_droplet_fields_passes_semantics(self):
+        raw = _base_raw_config(**_liquid_jet_fields())
+        raw["droplet_injection"].pop("droplet_velocity_in")
+        raw["droplet_injection"].pop("droplet_diameter_mean_in")
+        raw["droplet_injection"].pop("droplet_diameter_max_in")
+        validate_semantic_config(raw)
 
     def test_valid_droplet_injection_passes_semantics(self):
         raw = _base_raw_config(injection_mode="droplet_injection")
@@ -168,3 +182,14 @@ class TestTranslatorInjectionMode:
         assert di.liquid_jet_diameter is None
         assert di.liquid_velocity is None
         assert di.surface_tension is None
+
+    def test_liquid_jet_droplet_fields_may_be_absent(self):
+        raw = _base_raw_config(**_liquid_jet_fields())
+        raw["droplet_injection"].pop("droplet_velocity_in")
+        raw["droplet_injection"].pop("droplet_diameter_mean_in")
+        raw["droplet_injection"].pop("droplet_diameter_max_in")
+        case = translate_case_config(raw)
+        di = case.droplet_injection
+        assert di.droplet_velocity_in is None
+        assert di.droplet_diameter_mean_in is None
+        assert di.droplet_diameter_max_in is None

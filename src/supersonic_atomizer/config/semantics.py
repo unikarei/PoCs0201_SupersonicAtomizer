@@ -82,22 +82,24 @@ def _validate_fluid_section(raw_config: dict[str, Any]) -> None:
 
 def _validate_droplet_injection(raw_config: dict[str, Any]) -> None:
     droplet_injection = raw_config["droplet_injection"]
-    _require_positive(
-        droplet_injection["droplet_diameter_mean_in"],
-        "droplet_injection.droplet_diameter_mean_in",
-    )
-    _require_positive(
-        droplet_injection["droplet_diameter_max_in"],
-        "droplet_injection.droplet_diameter_max_in",
-    )
-
-    if (
-        droplet_injection["droplet_diameter_max_in"]
-        < droplet_injection["droplet_diameter_mean_in"]
-    ):
-        raise ValueError(
-            "Field 'droplet_injection.droplet_diameter_max_in' must be greater than or equal to 'droplet_diameter_mean_in'."
+    injection_mode = droplet_injection.get("injection_mode", "droplet_injection")
+    if injection_mode == "droplet_injection":
+        _require_positive(
+            droplet_injection["droplet_diameter_mean_in"],
+            "droplet_injection.droplet_diameter_mean_in",
         )
+        _require_positive(
+            droplet_injection["droplet_diameter_max_in"],
+            "droplet_injection.droplet_diameter_max_in",
+        )
+
+        if (
+            droplet_injection["droplet_diameter_max_in"]
+            < droplet_injection["droplet_diameter_mean_in"]
+        ):
+            raise ValueError(
+                "Field 'droplet_injection.droplet_diameter_max_in' must be greater than or equal to 'droplet_diameter_mean_in'."
+            )
 
     water_mass_flow_rate = droplet_injection.get("water_mass_flow_rate")
     if water_mass_flow_rate is not None:
@@ -113,7 +115,6 @@ def _validate_droplet_injection(raw_config: dict[str, Any]) -> None:
             "droplet_injection.water_mass_flow_rate_percent",
         )
 
-    injection_mode = droplet_injection.get("injection_mode", "droplet_injection")
     if injection_mode not in {"droplet_injection", "liquid_jet_injection"}:
         raise ValueError("Field 'droplet_injection.injection_mode' must be 'droplet_injection' or 'liquid_jet_injection'.")
 

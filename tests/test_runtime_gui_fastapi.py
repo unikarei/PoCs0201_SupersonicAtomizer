@@ -356,6 +356,82 @@ class TestCasesEndpoints:
         assert resp.status_code == 204
         assert client.get("/api/cases/del_test_fa").status_code == 404
 
+    def test_list_projects(self, client):
+        resp = client.get("/api/cases/projects/")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "projects" in data
+        assert "default_project" in data
+
+    def test_create_project(self, client):
+        resp = client.post("/api/cases/projects/", json={"name": "proj_fastapi"})
+        assert resp.status_code == 201
+        assert resp.json()["name"] == "proj_fastapi"
+
+    def test_delete_project(self, client):
+        client.post("/api/cases/projects/", json={"name": "proj_delete"})
+        resp = client.delete("/api/cases/projects/proj_delete")
+        assert resp.status_code == 204
+
+    def test_rename_project(self, client):
+        client.post("/api/cases/projects/", json={"name": "proj_old"})
+        resp = client.post("/api/cases/projects/proj_old/rename", json={"new_name": "proj_new"})
+        assert resp.status_code == 200
+        assert resp.json()["name"] == "proj_new"
+
+    def test_export_project(self, client):
+        client.post("/api/cases/projects/", json={"name": "proj_zip"})
+        client.post("/api/cases/projects/proj_zip/cases/", json={"name": "case_a"})
+        resp = client.get("/api/cases/projects/proj_zip/export")
+        assert resp.status_code == 200
+        assert "application/zip" in resp.headers["content-type"]
+        assert resp.content.startswith(b"PK")
+
+    def test_create_and_get_project_case(self, client):
+        client.post("/api/cases/projects/", json={"name": "proj_fastapi"})
+        create_resp = client.post("/api/cases/projects/proj_fastapi/cases/", json={"name": "case_in_project"})
+        assert create_resp.status_code == 201
+        get_resp = client.get("/api/cases/projects/proj_fastapi/cases/case_in_project")
+        assert get_resp.status_code == 200
+        assert "fluid" in get_resp.json()
+
+    def test_list_project_cases(self, client):
+        client.post("/api/cases/projects/", json={"name": "proj_fastapi"})
+        client.post("/api/cases/projects/proj_fastapi/cases/", json={"name": "case_a"})
+        resp = client.get("/api/cases/projects/proj_fastapi/cases/")
+        assert resp.status_code == 200
+        assert "case_a" in resp.json()["cases"]
+
+    def test_duplicate_project_case(self, client):
+        client.post("/api/cases/projects/", json={"name": "proj_duplicate"})
+        client.post("/api/cases/projects/proj_duplicate/cases/", json={"name": "case_a"})
+        resp = client.post(
+            "/api/cases/projects/proj_duplicate/cases/case_a/duplicate",
+            json={"new_name": "case_b"},
+        )
+        assert resp.status_code == 201
+        listed = client.get("/api/cases/projects/proj_duplicate/cases/").json()["cases"]
+        assert "case_b" in listed
+
+    def test_rename_project_case(self, client):
+        client.post("/api/cases/projects/", json={"name": "proj_rename_case"})
+        client.post("/api/cases/projects/proj_rename_case/cases/", json={"name": "case_a"})
+        resp = client.post(
+            "/api/cases/projects/proj_rename_case/cases/case_a/rename",
+            json={"new_name": "case_b"},
+        )
+        assert resp.status_code == 200
+        listed = client.get("/api/cases/projects/proj_rename_case/cases/").json()["cases"]
+        assert "case_b" in listed
+
+    def test_export_project_case(self, client):
+        client.post("/api/cases/projects/", json={"name": "proj_export"})
+        client.post("/api/cases/projects/proj_export/cases/", json={"name": "case_a"})
+        resp = client.get("/api/cases/projects/proj_export/cases/case_a/export")
+        assert resp.status_code == 200
+        assert "application/x-yaml" in resp.headers["content-type"]
+        assert "fluid:" in resp.text
+
 
 class TestSimulationEndpoints:
     """Tests for the simulation run/status/result flow (mocked solver)."""
@@ -416,6 +492,16 @@ class TestSimulationEndpoints:
                 break
             time.sleep(0.1)
         assert status_resp.json()["status"] in ("completed", "failed")
+
+    def test_run_project_case_returns_job_id(self, client, mock_bridge_run):
+        client.post("/api/cases/projects/", json={"name": "proj_sim"})
+        client.post("/api/cases/projects/proj_sim/cases/", json={"name": "sim_case"})
+        resp = client.post(
+            "/api/simulation/run",
+            json={"project_name": "proj_sim", "case_name": "sim_case"},
+        )
+        assert resp.status_code == 200
+        uuid.UUID(resp.json()["job_id"])
 
 
 class TestUnitsEndpoints:

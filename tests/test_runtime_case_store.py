@@ -198,6 +198,131 @@ def test_case_path_returns_expected_path(store, tmp_path):
     assert path == tmp_path / "cases" / "alpha.yaml"
 
 
+def test_create_project_creates_directory(store, tmp_path):
+    path = store.create_project("proj_alpha")
+    assert path == tmp_path / "cases" / "proj_alpha"
+    assert path.is_dir()
+
+
+def test_list_projects_includes_created_project(store):
+    store.create_project("proj_alpha")
+    assert store.list_projects() == ["proj_alpha"]
+
+
+def test_project_case_round_trip(store, tmp_path):
+    store.create_project("proj_alpha")
+    path = store.create("alpha", project="proj_alpha")
+    assert path == tmp_path / "cases" / "proj_alpha" / "alpha.yaml"
+    cfg = store.load("alpha", project="proj_alpha")
+    cfg["fluid"]["working_fluid"] = "steam"
+    store.save("alpha", cfg, project="proj_alpha")
+    reloaded = store.load("alpha", project="proj_alpha")
+    assert reloaded["fluid"]["working_fluid"] == "steam"
+
+
+def test_default_project_lists_legacy_root_cases(store):
+    store.create("legacy_case")
+    assert store.list_projects() == ["default"]
+    assert store.list_cases(project="default") == ["legacy_case"]
+
+
+def test_default_project_loads_legacy_root_case(store):
+    store.create("legacy_case")
+    cfg = store.load("legacy_case", project="default")
+    assert cfg["fluid"]["working_fluid"] == "air"
+
+
+def test_duplicate_project_case(store):
+    store.create_project("proj_alpha")
+    store.create("alpha", project="proj_alpha")
+    duplicated_path = store.duplicate("alpha", "alpha_copy", project="proj_alpha")
+    assert duplicated_path.name == "alpha_copy.yaml"
+    assert store.exists("alpha_copy", project="proj_alpha")
+
+
+def test_rename_project_case(store):
+    store.create_project("proj_alpha")
+    store.create("alpha", project="proj_alpha")
+    renamed_path = store.rename_case("alpha", "alpha_renamed", project="proj_alpha")
+    assert renamed_path.name == "alpha_renamed.yaml"
+    assert not store.exists("alpha", project="proj_alpha")
+    assert store.exists("alpha_renamed", project="proj_alpha")
+
+
+def test_rename_default_project_legacy_case(store):
+    store.create("legacy_case")
+    renamed_path = store.rename_case("legacy_case", "legacy_case_renamed", project="default")
+    assert renamed_path.name == "legacy_case_renamed.yaml"
+    assert not store.exists("legacy_case", project="default")
+    assert store.exists("legacy_case_renamed", project="default")
+
+
+def test_rename_project_directory(store, tmp_path):
+    store.create_project("proj_alpha")
+    store.create("alpha", project="proj_alpha")
+    path = store.rename_project("proj_alpha", "proj_beta")
+    assert path == tmp_path / "cases" / "proj_beta"
+    assert store.exists("alpha", project="proj_beta")
+    assert "proj_beta" in store.list_projects()
+
+
+def test_rename_default_project_moves_legacy_cases(store):
+    store.create("legacy_case")
+    store.rename_project("default", "archive")
+    assert store.exists("legacy_case", project="archive")
+    assert not store.exists("legacy_case", project="default")
+
+
+def test_export_yaml_returns_case_text(store):
+    store.create("alpha")
+    exported = store.export_yaml("alpha")
+    assert "fluid:" in exported
+    assert "working_fluid: air" in exported
+
+
+def test_migrate_legacy_cases_moves_root_cases_to_default_project(store, tmp_path):
+    store.create("legacy_case")
+    result = store.migrate_legacy_cases()
+    assert result.target_project == "default"
+    assert result.moved_cases == ("legacy_case",)
+    assert not (tmp_path / "cases" / "legacy_case.yaml").exists()
+    assert (tmp_path / "cases" / "default" / "legacy_case.yaml").exists()
+
+
+def test_migrate_legacy_cases_dry_run_does_not_move_files(store, tmp_path):
+    store.create("legacy_case")
+    result = store.migrate_legacy_cases(dry_run=True)
+    assert result.dry_run is True
+    assert result.moved_cases == ("legacy_case",)
+    assert (tmp_path / "cases" / "legacy_case.yaml").exists()
+
+
+def test_export_project_archive_contains_project_case_yaml(store):
+    store.create_project("proj_alpha")
+    store.create("alpha", project="proj_alpha")
+    payload = store.export_project_archive("proj_alpha")
+    assert payload.startswith(b"PK")
+
+
+def test_export_default_project_archive_contains_legacy_case_yaml(store):
+    store.create("legacy_case")
+    payload = store.export_project_archive("default")
+    assert payload.startswith(b"PK")
+
+
+def test_delete_project_removes_project_directory_and_cases(store, tmp_path):
+    store.create_project("proj_alpha")
+    store.create("alpha", project="proj_alpha")
+    store.delete_project("proj_alpha")
+    assert not (tmp_path / "cases" / "proj_alpha").exists()
+
+
+def test_delete_default_project_removes_legacy_root_cases(store, tmp_path):
+    store.create("legacy_case")
+    store.delete_project("default")
+    assert not (tmp_path / "cases" / "legacy_case.yaml").exists()
+
+
 # ── CaseNameError ─────────────────────────────────────────────────────────────
 
 

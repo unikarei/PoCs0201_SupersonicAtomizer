@@ -119,9 +119,11 @@ def _validate_geometry_section(raw_config: dict[str, Any]) -> None:
 
 def _validate_droplet_injection(raw_config: dict[str, Any]) -> None:
     droplet_section = _require_mapping(raw_config, "droplet_injection")
-    _require_number(droplet_section, "droplet_injection", "droplet_velocity_in")
-    _require_number(droplet_section, "droplet_injection", "droplet_diameter_mean_in")
-    _require_number(droplet_section, "droplet_injection", "droplet_diameter_max_in")
+    injection_mode = droplet_section.get("injection_mode", "droplet_injection")
+    if injection_mode != "liquid_jet_injection":
+        _require_number(droplet_section, "droplet_injection", "droplet_velocity_in")
+        _require_number(droplet_section, "droplet_injection", "droplet_diameter_mean_in")
+        _require_number(droplet_section, "droplet_injection", "droplet_diameter_max_in")
     if "injection_mode" in droplet_section and not isinstance(droplet_section["injection_mode"], str):
         raise ValueError("Field 'droplet_injection.injection_mode' must be a string when supplied.")
     # Optional liquid-jet fields (validated when present)

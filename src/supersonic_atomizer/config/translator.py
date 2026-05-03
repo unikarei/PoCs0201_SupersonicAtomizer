@@ -49,9 +49,9 @@ def _translate_geometry_config(raw_config: dict[str, Any]) -> GeometryConfig:
 def _translate_droplet_injection(raw_config: dict[str, Any]) -> DropletInjectionConfig:
     droplet_section = raw_config["droplet_injection"]
     return DropletInjectionConfig(
-        droplet_velocity_in=droplet_section["droplet_velocity_in"],
-        droplet_diameter_mean_in=droplet_section["droplet_diameter_mean_in"],
-        droplet_diameter_max_in=droplet_section["droplet_diameter_max_in"],
+        droplet_velocity_in=droplet_section.get("droplet_velocity_in"),
+        droplet_diameter_mean_in=droplet_section.get("droplet_diameter_mean_in"),
+        droplet_diameter_max_in=droplet_section.get("droplet_diameter_max_in"),
         water_mass_flow_rate=droplet_section.get("water_mass_flow_rate"),
         water_mass_flow_rate_percent=droplet_section.get("water_mass_flow_rate_percent"),
         injection_mode=droplet_section.get("injection_mode", "droplet_injection"),

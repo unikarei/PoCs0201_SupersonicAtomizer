@@ -16,6 +16,7 @@ from supersonic_atomizer.app import (
     get_application_service,
     run_laval_sweep,
 )
+from supersonic_atomizer.gui.case_store import CaseStore, LegacyCaseMigrationResult
 
 
 @dataclass(frozen=True, slots=True)
@@ -23,9 +24,12 @@ class CLIOptions:
     """Parsed CLI options for the current command boundary."""
 
     command: str
-    case_path: str
+    case_path: str | None = None
     startup_only: bool = False
     output_directory: str | None = None
+    cases_dir: str | None = None
+    project_name: str | None = None
+    dry_run: bool = False
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -60,6 +64,31 @@ def build_laval_sweep_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def build_case_store_migration_parser() -> argparse.ArgumentParser:
+    """Build the CLI parser for migrating legacy flat GUI cases into a project."""
+
+    parser = argparse.ArgumentParser(
+        prog="supersonic-atomizer migrate-case-store",
+        description="Move legacy flat cases/*.yaml files into cases/<project>/.",
+    )
+    parser.add_argument(
+        "--cases-dir",
+        default="cases",
+        help="Root case-store directory to migrate. Defaults to cases/.",
+    )
+    parser.add_argument(
+        "--project",
+        default="default",
+        help="Target project name for migrated legacy cases.",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Report which cases would be moved without writing changes.",
+    )
+    return parser
+
+
 def parse_cli_args(argv: Sequence[str] | None = None) -> CLIOptions:
     """Parse CLI arguments into a small CLI options model."""
 
@@ -70,6 +99,15 @@ def parse_cli_args(argv: Sequence[str] | None = None) -> CLIOptions:
             command="laval-sweep",
             case_path=namespace.case_path,
             output_directory=namespace.output_directory,
+        )
+
+    if args and args[0] == "migrate-case-store":
+        namespace = build_case_store_migration_parser().parse_args(args[1:])
+        return CLIOptions(
+            command="migrate-case-store",
+            cases_dir=namespace.cases_dir,
+            project_name=namespace.project,
+            dry_run=namespace.dry_run,
         )
 
     namespace = build_parser().parse_args(args)
@@ -85,10 +123,17 @@ def main(
     *,
     application_service: ApplicationService | None = None,
     laval_sweep_runner=run_laval_sweep,
-) -> StartupResult | SimulationRunResult | LavalSweepResult:
+) -> StartupResult | SimulationRunResult | LavalSweepResult | LegacyCaseMigrationResult:
     """Parse CLI inputs and hand off to the application service boundary."""
 
     options = parse_cli_args(argv)
+    if options.command == "migrate-case-store":
+        store = CaseStore(cases_dir=options.cases_dir)
+        return store.migrate_legacy_cases(
+            target_project=options.project_name,
+            dry_run=options.dry_run,
+        )
+
     if options.command == "laval-sweep":
         return laval_sweep_runner(options.case_path, output_directory=options.output_directory)
 
@@ -165,6 +210,18 @@ def format_laval_sweep_report(sweep_result: LavalSweepResult) -> str:
     )
 
 
+def format_case_store_migration_report(result: LegacyCaseMigrationResult) -> str:
+    """Format concise reporting for legacy case-store migration."""
+
+    moved = ", ".join(result.moved_cases) if result.moved_cases else "none"
+    skipped = ", ".join(result.skipped_cases) if result.skipped_cases else "none"
+    action = "would move" if result.dry_run else "moved"
+    return (
+        f"Case-store migration {action} to project={result.target_project}; "
+        f"moved={moved}; skipped={skipped}"
+    )
+
+
 def run_cli(
     argv: Sequence[str] | None = None,
     *,
@@ -180,6 +237,10 @@ def run_cli(
         application_service=application_service,
         laval_sweep_runner=laval_sweep_runner,
     )
+
+    if isinstance(result, LegacyCaseMigrationResult):
+        (stdout or sys.stdout).write(format_case_store_migration_report(result) + "\n")
+        return 0
 
     if isinstance(result, LavalSweepResult):
         (stdout or sys.stdout).write(format_laval_sweep_report(result) + "\n")

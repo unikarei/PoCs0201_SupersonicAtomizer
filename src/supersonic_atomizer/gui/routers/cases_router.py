@@ -14,8 +14,9 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import PlainTextResponse, Response
 
-from supersonic_atomizer.gui.case_store import CaseNameError, CaseNotFoundError, CaseStore
+from supersonic_atomizer.gui.case_store import CaseNameError, CaseNotFoundError, CaseStore, ProjectNameError, ProjectNotFoundError
 from supersonic_atomizer.gui.job_store import get_job_store
 from supersonic_atomizer.gui.multi_run import MultiRunSimulationResult
 from supersonic_atomizer.gui.pages.post_graphs import extract_overlay_plot_series, extract_plot_series
@@ -25,7 +26,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 
 matplotlib.use("Agg")
-from supersonic_atomizer.gui.schemas import CaseCreateRequest
+from supersonic_atomizer.gui.schemas import CaseCreateRequest, CaseDuplicateRequest, CaseRenameRequest, ProjectCreateRequest, ProjectRenameRequest
 
 router = APIRouter()
 
@@ -70,6 +71,267 @@ _SKELETON: dict[str, Any] = {
 
 def _get_store() -> CaseStore:
     return CaseStore()
+
+
+def _case_ref(project: str, name: str) -> str:
+    return f"{project}/{name}"
+
+
+@router.get("/projects/")
+async def list_projects() -> dict[str, Any]:
+    """Return all saved project names and the default project name."""
+    store = _get_store()
+    return {
+        "projects": store.list_projects(),
+        "default_project": store.default_project_name,
+    }
+
+
+@router.post("/projects/", status_code=201)
+async def create_project(body: ProjectCreateRequest) -> dict[str, str]:
+    """Create an empty project directory."""
+    store = _get_store()
+    try:
+        store.create_project(body.name)
+    except ProjectNameError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except FileExistsError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return {"name": body.name}
+
+
+@router.delete("/projects/{project}", status_code=204)
+async def delete_project(project: str) -> None:
+    """Delete a project and all cases contained within it."""
+    store = _get_store()
+    try:
+        store.delete_project(project)
+    except ProjectNameError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ProjectNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post("/projects/{project}/rename")
+async def rename_project(project: str, body: ProjectRenameRequest) -> dict[str, str]:
+    """Rename a project and preserve its contained cases."""
+    store = _get_store()
+    try:
+        path = store.rename_project(project, body.new_name)
+    except ProjectNameError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ProjectNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except FileExistsError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return {"name": path.name}
+
+
+@router.get("/projects/{project}/export")
+async def export_project(project: str) -> Response:
+    """Return a ZIP archive containing all YAML cases in the selected project."""
+    store = _get_store()
+    try:
+        payload = store.export_project_archive(project)
+    except ProjectNameError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ProjectNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return Response(
+        content=payload,
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": f'attachment; filename="{project}.zip"',
+        },
+    )
+
+
+@router.get("/projects/{project}/cases/")
+async def list_project_cases(project: str) -> dict[str, Any]:
+    """Return all case names for the selected project."""
+    store = _get_store()
+    try:
+        return {"project": project, "cases": store.list_cases(project=project)}
+    except ProjectNameError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/projects/{project}/cases/", status_code=201)
+async def create_project_case(project: str, body: CaseCreateRequest) -> dict[str, str]:
+    """Create an empty skeleton case in the selected project."""
+    store = _get_store()
+    try:
+        store.create(body.name, _SKELETON, project=project)
+    except (ProjectNameError, CaseNameError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except FileExistsError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return {"project": project, "name": body.name}
+
+
+@router.get("/projects/{project}/cases/{name}")
+async def get_project_case(project: str, name: str) -> dict[str, Any]:
+    """Return the stored config dict for a project-scoped case."""
+    store = _get_store()
+    try:
+        return store.load(name, project=project)
+    except ProjectNameError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except CaseNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.put("/projects/{project}/cases/{name}")
+async def save_project_case(project: str, name: str, config: dict[str, Any]) -> dict[str, str]:
+    """Overwrite the stored config for a project-scoped case."""
+    store = _get_store()
+    try:
+        store.save(name, config, project=project)
+    except ProjectNameError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"project": project, "name": name}
+
+
+@router.delete("/projects/{project}/cases/{name}", status_code=204)
+async def delete_project_case(project: str, name: str) -> None:
+    """Delete the selected project-scoped case."""
+    store = _get_store()
+    try:
+        store.delete(name, project=project)
+    except ProjectNameError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except CaseNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post("/projects/{project}/cases/{name}/duplicate", status_code=201)
+async def duplicate_project_case(project: str, name: str, body: CaseDuplicateRequest) -> dict[str, str]:
+    """Duplicate the selected project case under a new case name."""
+    store = _get_store()
+    try:
+        path = store.duplicate(
+            name,
+            body.new_name,
+            project=project,
+            target_project=body.target_project or project,
+        )
+    except (ProjectNameError, CaseNameError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except FileExistsError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except CaseNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {
+        "project": path.parent.name,
+        "name": path.stem,
+    }
+
+
+@router.post("/projects/{project}/cases/{name}/rename")
+async def rename_project_case(project: str, name: str, body: CaseRenameRequest) -> dict[str, str]:
+    """Rename a project case, optionally moving it to another project."""
+    store = _get_store()
+    try:
+        path = store.rename_case(
+            name,
+            body.new_name,
+            project=project,
+            target_project=body.target_project or project,
+        )
+    except (ProjectNameError, CaseNameError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except CaseNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except FileExistsError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return {
+        "project": path.parent.name,
+        "name": path.stem,
+    }
+
+
+@router.get("/projects/{project}/cases/{name}/export")
+async def export_project_case(project: str, name: str) -> PlainTextResponse:
+    """Return the selected project case as YAML text for download/export."""
+    store = _get_store()
+    try:
+        payload = store.export_yaml(name, project=project)
+    except ProjectNameError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except CaseNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return PlainTextResponse(
+        payload,
+        media_type="application/x-yaml",
+        headers={
+            "Content-Disposition": f'attachment; filename="{project}-{name}.yaml"',
+        },
+    )
+
+
+@router.get("/projects/{project}/cases/{name}/last_result")
+async def get_last_result_for_project_case(project: str, name: str) -> dict[str, Any]:
+    """Return the most recent completed simulation result for a project case."""
+    job_store = get_job_store()
+    record = job_store.latest_completed_for_case(_case_ref(project, name))
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"No completed run found for case {name!r} in project {project!r}.")
+
+    plots: dict[str, str] = {}
+    table_rows: list[dict[str, Any]] = []
+    plot_fields: list[str] = []
+    run_count = 1
+
+    if isinstance(record.result, MultiRunSimulationResult):
+        labeled_results = list(record.result.labeled_simulation_results())
+        if not labeled_results:
+            raise HTTPException(status_code=409, detail="Simulation result is not available.")
+        overlay_series = extract_overlay_plot_series(labeled_results, None)
+        for field, data in overlay_series.items():
+            fig, ax = plt.subplots(figsize=(6.5, 3.5))
+            for line in data["series"]:
+                ax.plot(line["x"], line["y"], label=line["label"])
+            ax.set_xlabel(data["x_label"])
+            ax.set_ylabel(data["ylabel"])
+            ax.set_title(data["title"])
+            ax.grid(True, alpha=0.3)
+            if len(data["series"]) > 1:
+                ax.legend(fontsize="small")
+            plt.tight_layout()
+            plots[field] = figure_to_base64(fig)
+            plt.close(fig)
+        table_rows = aggregate_result_to_table_rows(labeled_results, None)
+        plot_fields = list(overlay_series.keys())
+        run_count = record.result.run_count
+    else:
+        run_result = record.result
+        if run_result is None or run_result.simulation_result is None:
+            raise HTTPException(status_code=409, detail="Simulation result is not available.")
+        sim_result = run_result.simulation_result
+        series = extract_plot_series(sim_result, None)
+        for field, data in series.items():
+            fig, ax = plt.subplots(figsize=(6, 3))
+            ax.plot(data["x"], data["y"])
+            ax.set_xlabel(data["x_label"])
+            ax.set_ylabel(data["ylabel"])
+            ax.set_title(data["title"])
+            ax.grid(True, alpha=0.3)
+            plt.tight_layout()
+            plots[field] = figure_to_base64(fig)
+            plt.close(fig)
+        table_rows = result_to_table_rows(sim_result, None)
+        plot_fields = list(series.keys())
+
+    csv_content = generate_csv_content(table_rows)
+
+    return {
+        "status": record.status,
+        "plots": plots,
+        "plot_fields": plot_fields,
+        "table_rows": table_rows,
+        "csv": csv_content,
+        "run_count": run_count,
+    }
 
 
 @router.get("/")

@@ -920,10 +920,15 @@ User action
 ### B.5 Case Store Design
 
 - Cases are stored in a local YAML-backed case store (default directory: `cases/`).
-- `case_store.py` provides create, list, load, and save operations.
+- The GUI organizes saved inputs as a two-level hierarchy: `Project > Case`.
+- The canonical on-disk layout is `cases/<project>/<case>.yaml`; legacy flat cases in `cases/*.yaml` remain readable through the default project for backward compatibility.
+- `case_store.py` provides project-aware create, list, load, save, delete, and rename operations.
+- `case_store.py` also owns case duplication, case/project export, project deletion, and legacy flat-case migration into a target project.
 - Each case YAML file is structurally identical to the existing input format consumed by `config/loader.py`.
 - The GUI never constructs YAML manually; it translates form state into the internal case model, which is then serialized by `case_store.py`.
 - Multi-value numeric Conditions entries are not persisted as multi-valued YAML scalars; when users want to save a case, the persisted case remains a single solver-compatible case definition.
+- The CLI exposes a maintenance command to migrate legacy `cases/*.yaml` files into `cases/<project>/` without bypassing the case-store boundary.
+- The GUI sidebar exposes project-scoped maintenance actions for renaming/exporting/deleting a project and case-scoped actions for renaming/duplicating/exporting/deleting individual cases.
 
 ### B.6 Directory Structure Addition
 
@@ -943,7 +948,9 @@ src/supersonic_atomizer/
           ├─ solve.py
           ├─ post_graphs.py
           └─ post_table.py
-cases/               ← default case-store directory
+cases/               ← default case-store directory root
+  └─ <project>/
+       └─ <case>.yaml
 ```
 
 ### B.7 Technology Selection Constraints

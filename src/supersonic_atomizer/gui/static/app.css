@@ -39,6 +39,24 @@ body {
   margin-bottom: 0.5rem;
 }
 
+.sidebar-label {
+  display: block;
+  font-size: 0.78rem;
+  color: #8ab4d0;
+  margin-bottom: 0.2rem;
+}
+
+.sidebar-select {
+  width: 100%;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid #44607a;
+  border-radius: 4px;
+  background: #263545;
+  color: #dce6f0;
+  font-size: 0.85rem;
+  margin-bottom: 0.45rem;
+}
+
 .case-list {
   list-style: none;
   display: flex;
@@ -68,7 +86,8 @@ body {
   gap: 0.35rem;
 }
 
-.case-actions input {
+.case-actions input,
+.case-actions select {
   width: 100%;
   padding: 0.3rem 0.5rem;
   border: 1px solid #44607a;
@@ -91,6 +110,20 @@ body {
 }
 
 .case-actions button:hover { background: #2d5e91; }
+
+.case-tools button {
+  background: #314558;
+}
+
+.case-tools button:hover {
+  background: #3d5871;
+}
+
+.case-tools button:disabled {
+  background: #243240;
+  color: #7d93a8;
+  cursor: not-allowed;
+}
 
 .active-case {
   font-size: 0.8rem;
@@ -189,6 +222,57 @@ select {
 input:focus, select:focus {
   outline: none;
   border-color: #3a78b5;
+}
+
+input[readonly] {
+  background: #eef2f6;
+  color: #334155;
+}
+
+.radio-fieldset {
+  border: none;
+  margin: 0 0 0.7rem 0;
+  padding: 0;
+}
+
+.radio-fieldset legend {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #334155;
+  margin-bottom: 0.3rem;
+  padding: 0;
+}
+
+.radio-group {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 0;
+}
+
+.inline-radio {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center;
+  gap: 0.25rem;
+  margin-bottom: 0;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.inline-radio input[type="radio"] {
+  width: auto;
+  margin: 0;
+  cursor: pointer;
+}
+
+.calc-note {
+  font-size: 0.82rem;
+  color: #334155;
+  background: #f8fafc;
+  border: 1px solid #d0d8e0;
+  border-radius: 4px;
+  padding: 0.4rem 0.55rem;
+  margin: -0.2rem 0 0.6rem 0;
 }
 
 .form-actions {

@@ -854,14 +854,14 @@ Phase 23 is done when the GUI application can launch in a browser or desktop win
   - **Completion criteria:** The `gui/` package exists with the documented module layout; `service_bridge.py` wraps `ApplicationService`; tests cover import wiring and bridge call delegation.
 
 - [x] **P23-T03 — Implement case store**
-  - **Purpose:** Provide persistent case management (create, list, load, save) backed by a local YAML-backed case store in the `cases/` directory, using the existing config format.
+  - **Purpose:** Provide persistent case management backed by a local YAML-backed case store in the `cases/` directory, with `Project > Case` organization while preserving backward compatibility with legacy flat cases.
   - **Dependencies:** P23-T02, P11-T06.
-  - **Completion criteria:** `case_store.py` can create, list, load, and save cases; tests cover round-trip persistence and invalid-case handling.
+  - **Completion criteria:** `case_store.py` can create/list/rename/delete projects, create/list/load/save/rename/delete project-scoped cases, and still read legacy flat cases; tests cover round-trip persistence and invalid-name handling.
 
 - [x] **P23-T04 — Implement left panel — case management**
-  - **Purpose:** Render the fixed left panel showing the case list, new-case creation, and open-case loading using the case store.
+  - **Purpose:** Render the fixed left panel showing project selection/creation plus case list, case creation, and open-case loading using the case store.
   - **Dependencies:** P23-T03.
-  - **Completion criteria:** The left panel displays the case list, allows new case creation, and loads an existing case into GUI state; tests cover case selection and state update behavior.
+  - **Completion criteria:** The left panel displays the project selector and case list, allows new project/case creation, supports project and case rename plus case duplicate/delete/YAML export and project delete/ZIP export, and loads an existing project case into GUI state; tests cover selection and state update behavior.
 
 - [x] **P23-T05 — Implement Pre Tab 1 — analysis conditions form**
   - **Purpose:** Provide form controls for all required simulation inputs (fluid, $T_0$, $P_0$, $P_2$, droplet injection, breakup parameters) with inline SI unit labels and validation.

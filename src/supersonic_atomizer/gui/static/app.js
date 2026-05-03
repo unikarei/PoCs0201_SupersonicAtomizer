@@ -11,7 +11,9 @@
 "use strict";
 
 // ── State ─────────────────────────────────────────────────────────────────────
+let activeProjectName = null;
 let activeCaseName = null;
+let defaultProjectName = "default";
 let currentJobId   = null;
 let pollTimer      = null;
 let plotData       = {};   // field → base64 PNG
@@ -27,6 +29,24 @@ async function apiFetch(url, options = {}) {
     throw new Error(`${res.status} ${res.statusText}: ${text}`);
   }
   return res.status === 204 ? null : res.json();
+}
+
+async function apiFetchText(url, options = {}) {
+  const res = await fetch(url, { credentials: "same-origin", ...options });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`${res.status} ${res.statusText}: ${text}`);
+  }
+  return res.text();
+}
+
+async function apiFetchBlob(url, options = {}) {
+  const res = await fetch(url, { credentials: "same-origin", ...options });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`${res.status} ${res.statusText}: ${text}`);
+  }
+  return res.blob();
 }
 
 function showError(el, msg) {
@@ -83,33 +103,125 @@ document.querySelectorAll(".tab-btn").forEach(btn => {
 });
 
 // ── Case management ────────────────────────────────────────────────────────────
-async function loadCaseList() {
-  const data = await apiFetch("/api/cases/");
+function getActiveProjectName() {
+  return activeProjectName || defaultProjectName || "default";
+}
+
+function projectCasesBaseUrl(projectName) {
+  return `/api/cases/projects/${encodeURIComponent(projectName)}/cases`;
+}
+
+function projectCaseUrl(projectName, caseName) {
+  return `${projectCasesBaseUrl(projectName)}/${encodeURIComponent(caseName)}`;
+}
+
+function updateActiveCaseLabel() {
+  const label = document.getElementById("active-case-label");
+  if (!activeProjectName && !activeCaseName) {
+    label.textContent = "No case selected";
+    return;
+  }
+  if (!activeCaseName) {
+    label.textContent = `Active project: ${getActiveProjectName()}`;
+    return;
+  }
+  label.textContent = `Active: ${getActiveProjectName()} / ${activeCaseName}`;
+}
+
+function updateCaseActionButtons() {
+  const hasCase = Boolean(activeCaseName);
+  ["btn-rename-case", "btn-duplicate-case", "btn-delete-case", "btn-export-case"].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.disabled = !hasCase;
+  });
+}
+
+function updateProjectActionButtons() {
+  const hasProject = Boolean(activeProjectName);
+  ["btn-rename-project", "btn-delete-project", "btn-export-project"].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.disabled = !hasProject;
+  });
+}
+
+async function loadProjectList(preferredProjectName = null) {
+  const data = await apiFetch("/api/cases/projects/");
+  const select = document.getElementById("project-select");
+  const projects = data.projects || [];
+  defaultProjectName = data.default_project || "default";
+  select.innerHTML = "";
+
+  projects.forEach(projectName => {
+    const option = document.createElement("option");
+    option.value = projectName;
+    option.textContent = projectName;
+    select.appendChild(option);
+  });
+
+  if (projects.length === 0) {
+    activeProjectName = null;
+    activeCaseName = null;
+    document.getElementById("case-list").innerHTML = "";
+    updateActiveCaseLabel();
+    updateCaseActionButtons();
+    updateProjectActionButtons();
+    return;
+  }
+
+  const nextProject = preferredProjectName && projects.includes(preferredProjectName)
+    ? preferredProjectName
+    : (activeProjectName && projects.includes(activeProjectName) ? activeProjectName : projects[0]);
+  select.value = nextProject;
+  activeProjectName = nextProject;
+  updateActiveCaseLabel();
+  updateCaseActionButtons();
+  updateProjectActionButtons();
+  await loadCaseList(nextProject);
+}
+
+async function loadCaseList(projectName = getActiveProjectName()) {
+  if (!projectName) {
+    document.getElementById("case-list").innerHTML = "";
+    activeCaseName = null;
+    updateActiveCaseLabel();
+    updateCaseActionButtons();
+    return;
+  }
+  const data = await apiFetch(`${projectCasesBaseUrl(projectName)}/`);
   const ul = document.getElementById("case-list");
   ul.innerHTML = "";
   (data.cases || []).forEach(name => {
     const li = document.createElement("li");
     li.textContent = name;
-    if (name === activeCaseName) li.classList.add("active");
-    li.addEventListener("click", () => selectCase(name));
+    if (name === activeCaseName && projectName === activeProjectName) li.classList.add("active");
+    li.addEventListener("click", () => selectCase(projectName, name));
     ul.appendChild(li);
   });
+
+  if (!(data.cases || []).includes(activeCaseName) || projectName !== activeProjectName) {
+    activeProjectName = projectName;
+    activeCaseName = null;
+    updateActiveCaseLabel();
+  }
+  updateCaseActionButtons();
 }
 
-async function selectCase(name) {
+async function selectCase(projectName, name) {
+  activeProjectName = projectName;
   activeCaseName = name;
-  document.getElementById("active-case-label").textContent = `Active: ${name}`;
+  updateActiveCaseLabel();
+  updateCaseActionButtons();
   document.querySelectorAll(".case-list li").forEach(li => {
     li.classList.toggle("active", li.textContent === name);
   });
   // Load the case config into the forms
   try {
-    const cfg = await apiFetch(`/api/cases/${encodeURIComponent(name)}`);
+    const cfg = await apiFetch(projectCaseUrl(projectName, name));
     populateConditionsForm(cfg);
     populateGridForm(cfg);
     // Try to load the most recent completed simulation result for this case
     try {
-      const last = await apiFetch(`/api/cases/${encodeURIComponent(name)}/last_result`);
+      const last = await apiFetch(`${projectCaseUrl(projectName, name)}/last_result`);
       plotData = last.plots || {};
       tableRows = last.table_rows || [];
       csvContent = last.csv || "";
@@ -131,27 +243,196 @@ async function selectCase(name) {
   }
 }
 
-document.getElementById("btn-new-case").addEventListener("click", async () => {
-  const nameInput = document.getElementById("new-case-name");
+document.getElementById("project-select").addEventListener("change", async (ev) => {
+  activeProjectName = ev.target.value || null;
+  activeCaseName = null;
+  updateActiveCaseLabel();
+  updateProjectActionButtons();
+  await loadCaseList(activeProjectName);
+});
+
+document.getElementById("btn-new-project").addEventListener("click", async () => {
+  const nameInput = document.getElementById("new-project-name");
   const name = nameInput.value.trim();
   const errEl = document.getElementById("case-error");
-  if (!name) { showError(errEl, "Enter a case name."); return; }
+  if (!name) { showError(errEl, "Enter a project name."); return; }
   hideError(errEl);
   try {
-    await apiFetch("/api/cases/", {
+    await apiFetch("/api/cases/projects/", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name }),
     });
     nameInput.value = "";
-    await loadCaseList();
-    await selectCase(name);
+    await loadProjectList(name);
   } catch (e) {
     showError(errEl, e.message);
   }
 });
 
-document.getElementById("btn-refresh-cases").addEventListener("click", loadCaseList);
+document.getElementById("btn-new-case").addEventListener("click", async () => {
+  const nameInput = document.getElementById("new-case-name");
+  const name = nameInput.value.trim();
+  const errEl = document.getElementById("case-error");
+  if (!name) { showError(errEl, "Enter a case name."); return; }
+  if (!getActiveProjectName()) { showError(errEl, "Create or select a project first."); return; }
+  hideError(errEl);
+  try {
+    await apiFetch(`${projectCasesBaseUrl(getActiveProjectName())}/`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    });
+    nameInput.value = "";
+    await loadCaseList(getActiveProjectName());
+    await selectCase(getActiveProjectName(), name);
+  } catch (e) {
+    showError(errEl, e.message);
+  }
+});
+
+document.getElementById("btn-refresh-cases").addEventListener("click", async () => {
+  await loadProjectList(activeProjectName);
+});
+
+document.getElementById("btn-rename-project").addEventListener("click", async () => {
+  const projectName = getActiveProjectName();
+  if (!projectName) { alert("Select a project first."); return; }
+  const newName = window.prompt("New project name", projectName);
+  if (!newName || !newName.trim() || newName.trim() === projectName) return;
+  const errEl = document.getElementById("case-error");
+  hideError(errEl);
+  try {
+    const result = await apiFetch(`/api/cases/projects/${encodeURIComponent(projectName)}/rename`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ new_name: newName.trim() }),
+    });
+    activeProjectName = result.name || newName.trim();
+    updateActiveCaseLabel();
+    await loadProjectList(activeProjectName);
+    if (activeCaseName) {
+      await selectCase(activeProjectName, activeCaseName);
+    }
+  } catch (e) {
+    showError(errEl, e.message);
+  }
+});
+
+document.getElementById("btn-delete-project").addEventListener("click", async () => {
+  const projectName = getActiveProjectName();
+  if (!projectName) { alert("Select a project first."); return; }
+  if (!window.confirm(`Delete project ${projectName} and all contained cases?`)) return;
+  const errEl = document.getElementById("case-error");
+  hideError(errEl);
+  try {
+    await apiFetch(`/api/cases/projects/${encodeURIComponent(projectName)}`, { method: "DELETE" });
+    activeProjectName = null;
+    activeCaseName = null;
+    updateActiveCaseLabel();
+    updateCaseActionButtons();
+    updateProjectActionButtons();
+    await loadProjectList();
+  } catch (e) {
+    showError(errEl, e.message);
+  }
+});
+
+document.getElementById("btn-export-project").addEventListener("click", async () => {
+  const projectName = getActiveProjectName();
+  if (!projectName) { alert("Select a project first."); return; }
+  const errEl = document.getElementById("case-error");
+  hideError(errEl);
+  try {
+    const archiveBlob = await apiFetchBlob(`/api/cases/projects/${encodeURIComponent(projectName)}/export`);
+    const url = URL.createObjectURL(archiveBlob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${projectName}.zip`;
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    showError(errEl, e.message);
+  }
+});
+
+document.getElementById("btn-duplicate-case").addEventListener("click", async () => {
+  if (!activeCaseName) { alert("Select a case first."); return; }
+  const newName = window.prompt("New case name", `${activeCaseName}_copy`);
+  if (!newName || !newName.trim()) return;
+  const errEl = document.getElementById("case-error");
+  hideError(errEl);
+  try {
+    const result = await apiFetch(`${projectCaseUrl(getActiveProjectName(), activeCaseName)}/duplicate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ new_name: newName.trim() }),
+    });
+    await loadCaseList(getActiveProjectName());
+    await selectCase(result.project || getActiveProjectName(), result.name || newName.trim());
+  } catch (e) {
+    showError(errEl, e.message);
+  }
+});
+
+document.getElementById("btn-rename-case").addEventListener("click", async () => {
+  if (!activeCaseName) { alert("Select a case first."); return; }
+  const oldCaseName = activeCaseName;
+  const projectName = getActiveProjectName();
+  const newName = window.prompt("New case name", oldCaseName);
+  if (!newName || !newName.trim() || newName.trim() === oldCaseName) return;
+  const errEl = document.getElementById("case-error");
+  hideError(errEl);
+  try {
+    const result = await apiFetch(`${projectCaseUrl(projectName, oldCaseName)}/rename`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ new_name: newName.trim() }),
+    });
+    activeCaseName = null;
+    await loadCaseList(result.project || projectName);
+    await selectCase(result.project || projectName, result.name || newName.trim());
+  } catch (e) {
+    showError(errEl, e.message);
+  }
+});
+
+document.getElementById("btn-delete-case").addEventListener("click", async () => {
+  if (!activeCaseName) { alert("Select a case first."); return; }
+  const caseName = activeCaseName;
+  const projectName = getActiveProjectName();
+  if (!window.confirm(`Delete case ${projectName} / ${caseName}?`)) return;
+  const errEl = document.getElementById("case-error");
+  hideError(errEl);
+  try {
+    await apiFetch(projectCaseUrl(projectName, caseName), { method: "DELETE" });
+    activeCaseName = null;
+    updateActiveCaseLabel();
+    updateCaseActionButtons();
+    await loadCaseList(projectName);
+  } catch (e) {
+    showError(errEl, e.message);
+  }
+});
+
+document.getElementById("btn-export-case").addEventListener("click", async () => {
+  if (!activeCaseName) { alert("Select a case first."); return; }
+  const errEl = document.getElementById("case-error");
+  hideError(errEl);
+  try {
+    const projectName = getActiveProjectName();
+    const yamlText = await apiFetchText(`${projectCaseUrl(projectName, activeCaseName)}/export`);
+    const blob = new Blob([yamlText], { type: "application/x-yaml" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${projectName}_${activeCaseName}.yaml`;
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    showError(errEl, e.message);
+  }
+});
 
 // ── Conditions form ─────────────────────────────────────────────────────────
 
@@ -281,12 +562,223 @@ function initializeBreakupHelpDialog() {
 }
 
 function updateInletWetnessState(fluidValue) {
+  const row = document.getElementById("inlet-wetness-row");
   const f = document.getElementById("conditions-form");
-  const input = f.elements.inlet_wetness;
-  if (!input) return;
+  const input = f && f.elements.inlet_wetness;
   const isSteam = (fluidValue || "").toLowerCase() === "steam";
-  input.disabled = !isSteam;
-  if (!isSteam) input.value = "";
+  if (row) row.classList.toggle("hidden", !isSteam);
+  if (input && !isSteam) input.value = "";
+}
+
+function updateWaterMassFlowSectionUI() {
+  const f = document.getElementById("conditions-form");
+  if (!f) return;
+  const injectionMode = (f.elements.injection_mode?.value || "droplet_injection").toLowerCase();
+  const section = document.getElementById("water-mass-flow-section");
+  if (!section) return;
+  if (injectionMode === "liquid_jet_injection") {
+    section.classList.add("hidden");
+    return;
+  }
+  section.classList.remove("hidden");
+  const mode = f.elements.water_mass_flow_mode?.value || "kg_per_s";
+  const kgRow = document.getElementById("water-mass-flow-kgps-row");
+  const pctRow = document.getElementById("water-mass-flow-percent-row");
+  if (kgRow) kgRow.classList.toggle("hidden", mode === "percent");
+  if (pctRow) pctRow.classList.toggle("hidden", mode !== "percent");
+}
+
+function updateDropletInitialConditionUI() {
+  const f = document.getElementById("conditions-form");
+  if (!f) return;
+  const isLiquidJet = (f.elements.injection_mode?.value || "droplet_injection").toLowerCase() === "liquid_jet_injection";
+  const sectionIds = ["droplet-initial-conditions-section", "droplet-size-section"];
+  sectionIds.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.toggle("hidden", isLiquidJet);
+  });
+}
+
+const WATER_DENSITY_KG_PER_M3 = 998.2;
+const PI = Math.PI;
+
+function hasNonEmptyValue(value) {
+  return !(value === undefined || value === null || String(value).trim() === "");
+}
+
+function tryParsePositiveScalar(value) {
+  if (Array.isArray(value)) {
+    if (value.length !== 1) return null;
+    return tryParsePositiveScalar(value[0]);
+  }
+  if (!hasNonEmptyValue(value)) return null;
+  const tokens = splitNumericTokens(value);
+  if (tokens.length === 0) return null;
+  if (tokens.length > 1) return null;
+  const parsed = Number(tokens[0]);
+  if (Number.isNaN(parsed) || parsed <= 0) return null;
+  return parsed;
+}
+
+function formatCalculatedValue(value) {
+  if (value === null || value === undefined || Number.isNaN(value)) return "";
+  if (Math.abs(value) >= 1.0e-3 && Math.abs(value) < 1.0e3) {
+    return value.toPrecision(8).replace(/0+$/, "").replace(/\.$/, "");
+  }
+  return value.toExponential(6);
+}
+
+function getSelectedInputBasis(form) {
+  const basisControl = form.elements.input_basis;
+  if (!basisControl) return "diameter_based";
+  if (typeof basisControl.value === "string" && basisControl.value) {
+    return basisControl.value;
+  }
+  return "diameter_based";
+}
+
+function setSelectedInputBasis(form, basis) {
+  const basisControl = form.elements.input_basis;
+  if (!basisControl) return;
+  const normalized = basis === "mass_flow_based" ? "mass_flow_based" : "diameter_based";
+  if (typeof basisControl.value === "string") {
+    basisControl.value = normalized;
+    return;
+  }
+  Array.from(basisControl).forEach(el => {
+    el.checked = el.value === normalized;
+  });
+}
+
+function updateLiquidMaterialState(materialValue) {
+  const densityInput = document.getElementById("liquid-density-input");
+  if (!densityInput) return;
+  const material = (materialValue || "water").toLowerCase();
+  const isWater = material === "water";
+  densityInput.readOnly = isWater;
+  if (isWater) {
+    densityInput.value = String(WATER_DENSITY_KG_PER_M3);
+  }
+}
+
+function updateLiquidJetInputModeUI() {
+  const f = document.getElementById("conditions-form");
+  if (!f) return;
+  const mode = (f.elements.injection_mode?.value || "droplet_injection").toLowerCase();
+  const basis = getSelectedInputBasis(f);
+
+  const diameterInput = document.getElementById("liquid-jet-diameter-input");
+  const massFlowInput = document.getElementById("liquid-mass-flow-input");
+  const diameterLabel = document.getElementById("liquid-jet-diameter-label");
+  const massFlowLabel = document.getElementById("liquid-mass-flow-label");
+  const noteEl = document.getElementById("liquid-jet-calc-note");
+  if (!diameterInput || !massFlowInput || !diameterLabel || !massFlowLabel || !noteEl) return;
+
+  if (mode !== "liquid_jet_injection") {
+    diameterInput.readOnly = false;
+    massFlowInput.readOnly = false;
+    noteEl.classList.add("hidden");
+    noteEl.textContent = "";
+    diameterLabel.firstChild.textContent = "Liquid-jet diameter [m]";
+    massFlowLabel.firstChild.textContent = "Liquid mass flow rate [kg/s]";
+    return;
+  }
+
+  if (basis === "mass_flow_based") {
+    diameterInput.readOnly = true;
+    massFlowInput.readOnly = false;
+    diameterLabel.firstChild.textContent = "Calculated liquid-jet diameter [m]";
+    massFlowLabel.firstChild.textContent = "Liquid mass flow rate [kg/s]";
+    noteEl.textContent = "Mass-flow-based: diameter is calculated from mass flow rate, liquid velocity, and liquid density.";
+  } else {
+    diameterInput.readOnly = false;
+    massFlowInput.readOnly = true;
+    diameterLabel.firstChild.textContent = "Liquid-jet diameter [m]";
+    massFlowLabel.firstChild.textContent = "Calculated liquid mass flow rate [kg/s]";
+    noteEl.textContent = "Diameter-based: mass flow rate is calculated from jet diameter, liquid velocity, and liquid density.";
+  }
+  noteEl.classList.remove("hidden");
+}
+
+function recomputeLiquidJetDerivedField() {
+  const f = document.getElementById("conditions-form");
+  if (!f) return;
+  const mode = (f.elements.injection_mode?.value || "droplet_injection").toLowerCase();
+  if (mode !== "liquid_jet_injection") return;
+
+  const basis = getSelectedInputBasis(f);
+  const diameterInput = document.getElementById("liquid-jet-diameter-input");
+  const massFlowInput = document.getElementById("liquid-mass-flow-input");
+  const velocityInput = document.getElementById("liquid-velocity-input");
+  const densityInput = document.getElementById("liquid-density-input");
+  if (!diameterInput || !massFlowInput || !velocityInput || !densityInput) return;
+
+  const rho = tryParsePositiveScalar(densityInput.value);
+  const u = tryParsePositiveScalar(velocityInput.value);
+  if (rho === null || u === null) {
+    if (basis === "mass_flow_based") {
+      diameterInput.value = "";
+    } else {
+      massFlowInput.value = "";
+    }
+    return;
+  }
+
+  if (basis === "mass_flow_based") {
+    const mDot = tryParsePositiveScalar(massFlowInput.value);
+    if (mDot === null) {
+      diameterInput.value = "";
+      return;
+    }
+    const d = Math.sqrt((4.0 * mDot) / (PI * rho * u));
+    diameterInput.value = formatCalculatedValue(d);
+    return;
+  }
+
+  const d = tryParsePositiveScalar(diameterInput.value);
+  if (d === null) {
+    massFlowInput.value = "";
+    return;
+  }
+  const mDot = rho * (PI * d * d / 4.0) * u;
+  massFlowInput.value = formatCalculatedValue(mDot);
+}
+
+function normalizeLiquidJetConfig(cfg) {
+  const di = cfg?.droplet_injection;
+  if (!di || typeof di !== "object") return cfg;
+  const mode = (di.injection_mode || "droplet_injection").toLowerCase();
+  if (mode !== "liquid_jet_injection") return cfg;
+
+  di.droplet_velocity_in = null;
+  di.droplet_diameter_mean_in = null;
+  di.droplet_diameter_max_in = null;
+  di.water_mass_flow_rate = null;
+  di.water_mass_flow_rate_percent = null;
+
+  di.liquid_material = di.liquid_material || "water";
+  di.input_basis = di.input_basis || "diameter_based";
+  if ((di.liquid_material || "").toLowerCase() === "water" && !hasNonEmptyValue(di.liquid_density)) {
+    di.liquid_density = WATER_DENSITY_KG_PER_M3;
+  }
+
+  const rho = tryParsePositiveScalar(di.liquid_density);
+  const u = tryParsePositiveScalar(di.liquid_velocity);
+  const basis = (di.input_basis || "diameter_based").toLowerCase();
+  if (rho === null || u === null) return cfg;
+
+  if (basis === "mass_flow_based") {
+    const mDot = tryParsePositiveScalar(di.liquid_mass_flow_rate);
+    if (mDot !== null) {
+      di.liquid_jet_diameter = Math.sqrt((4.0 * mDot) / (PI * rho * u));
+    }
+  } else {
+    const d = tryParsePositiveScalar(di.liquid_jet_diameter);
+    if (d !== null) {
+      di.liquid_mass_flow_rate = rho * (PI * d * d / 4.0) * u;
+    }
+  }
+  return cfg;
 }
 
 function updateInjectionModeState(mode) {
@@ -297,6 +789,10 @@ function updateInjectionModeState(mode) {
   } else {
     jetSection.classList.add("hidden");
   }
+  updateDropletInitialConditionUI();
+  updateWaterMassFlowSectionUI();
+  updateLiquidJetInputModeUI();
+  recomputeLiquidJetDerivedField();
 }
 
 function assertLiquidJetRequirement(cfg) {
@@ -304,8 +800,14 @@ function assertLiquidJetRequirement(cfg) {
   if ((mode || "").toLowerCase() !== "liquid_jet_injection") return;
   const di = cfg.droplet_injection || {};
   const missing = [];
-  if (di.liquid_jet_diameter === undefined || di.liquid_jet_diameter === null || String(di.liquid_jet_diameter).trim() === "") missing.push("liquid_jet_diameter");
-  if (di.liquid_velocity === undefined || di.liquid_velocity === null || String(di.liquid_velocity).trim() === "") missing.push("liquid_velocity");
+  const basis = (di.input_basis || "diameter_based").toLowerCase();
+  if (!hasNonEmptyValue(di.liquid_velocity)) missing.push("liquid_velocity");
+  if (!hasNonEmptyValue(di.liquid_density)) missing.push("liquid_density");
+  if (basis === "mass_flow_based") {
+    if (!hasNonEmptyValue(di.liquid_mass_flow_rate)) missing.push("liquid_mass_flow_rate");
+  } else if (!hasNonEmptyValue(di.liquid_jet_diameter)) {
+    missing.push("liquid_jet_diameter");
+  }
   if (missing.length) {
     throw new Error(`Liquid-jet injection requires fields: ${missing.join(", ")}`);
   }
@@ -328,10 +830,15 @@ function populateConditionsForm(cfg) {
   setFieldValue(f, "droplet_velocity_in", di.droplet_velocity_in ?? "");
   setFieldValue(f, "injection_mode", di.injection_mode ?? "droplet_injection");
   updateInjectionModeState(di.injection_mode ?? "droplet_injection");
+  setFieldValue(f, "liquid_material", di.liquid_material ?? "water");
+  updateLiquidMaterialState(di.liquid_material ?? "water");
+  setSelectedInputBasis(f, di.input_basis ?? "diameter_based");
   setFieldValue(f, "liquid_jet_diameter", di.liquid_jet_diameter ?? "");
   setFieldValue(f, "liquid_mass_flow_rate", di.liquid_mass_flow_rate ?? "");
   setFieldValue(f, "liquid_velocity", di.liquid_velocity ?? "");
   setFieldValue(f, "liquid_density", di.liquid_density ?? "");
+  updateLiquidJetInputModeUI();
+  recomputeLiquidJetDerivedField();
   setFieldValue(f, "liquid_viscosity", di.liquid_viscosity ?? "");
   setFieldValue(f, "surface_tension", di.surface_tension ?? "");
   setFieldValue(f, "primary_breakup_model", di.primary_breakup_model ?? "empirical");
@@ -346,6 +853,7 @@ function populateConditionsForm(cfg) {
     "water_mass_flow_mode",
     hasPercent && !hasKgPerS ? "percent" : "kg_per_s"
   );
+  updateWaterMassFlowSectionUI();
   setFieldValue(f, "droplet_diameter_mean_in", di.droplet_diameter_mean_in ?? "");
   setFieldValue(f, "droplet_diameter_max_in", di.droplet_diameter_max_in ?? "");
   setFieldValue(f, "coupling_mode", ms.coupling_mode ?? "one_way");
@@ -364,6 +872,8 @@ function populateConditionsForm(cfg) {
   setFieldValue(f, "khrt_Crt",         ms.khrt_Crt         ?? kd.khrt_Crt);
   setFieldValue(f, "liquid_density",   ms.liquid_density   ?? kd.liquid_density);
   setFieldValue(f, "liquid_viscosity", ms.liquid_viscosity ?? kd.liquid_viscosity);
+  setFieldValue(f, "khrt_liquid_density",   ms.liquid_density   ?? kd.liquid_density);
+  setFieldValue(f, "khrt_liquid_viscosity", ms.liquid_viscosity ?? kd.liquid_viscosity);
 }
 
 function setFieldValue(form, name, value) {
@@ -452,6 +962,8 @@ function readConditionsFormForRun() {
   const f = document.getElementById("conditions-form");
   const fl = f.elements.working_fluid.value;
   const couplingMode = f.elements.coupling_mode.value;
+  const injectionMode = (f.elements.injection_mode && f.elements.injection_mode.value) || "droplet_injection";
+  const isLiquidJet = injectionMode === "liquid_jet_injection";
   const cfg = {
     fluid: { working_fluid: fl },
     boundary_conditions: {
@@ -460,8 +972,10 @@ function readConditionsFormForRun() {
       Ps_out: parseNumericOrList(f.elements.Ps_out.value, "Outlet static pressure P₂ [Pa]"),
     },
     droplet_injection: {
-      droplet_velocity_in:      parseNumericOrList(f.elements.droplet_velocity_in.value, "Initial droplet velocity [m/s]"),
-      injection_mode:           (f.elements.injection_mode && f.elements.injection_mode.value) || "droplet_injection",
+      droplet_velocity_in:      isLiquidJet ? null : parseNumericOrList(f.elements.droplet_velocity_in.value, "Initial droplet velocity [m/s]"),
+      injection_mode:           injectionMode,
+      input_basis:              getSelectedInputBasis(f),
+      liquid_material:          (f.elements.liquid_material && f.elements.liquid_material.value) || "water",
       liquid_jet_diameter:      parseNumericOrList(f.elements.liquid_jet_diameter?.value, "Liquid-jet diameter [m]", { optional: true }),
       liquid_mass_flow_rate:    parseNumericOrList(f.elements.liquid_mass_flow_rate?.value, "Liquid mass flow rate [kg/s]", { optional: true }),
       liquid_velocity:          parseNumericOrList(f.elements.liquid_velocity?.value, "Liquid velocity [m/s]", { optional: true }),
@@ -471,8 +985,8 @@ function readConditionsFormForRun() {
       primary_breakup_model:    (f.elements.primary_breakup_model && f.elements.primary_breakup_model.value) || null,
       primary_breakup_coefficient: parseNumericOrList(f.elements.primary_breakup_coefficient?.value, "Primary breakup coefficient", { optional: true }),
       initial_SMD_model:        (f.elements.initial_SMD_model && f.elements.initial_SMD_model.value) || null,
-      droplet_diameter_mean_in: parseNumericOrList(f.elements.droplet_diameter_mean_in.value, "Mean droplet diameter [m]"),
-      droplet_diameter_max_in:  parseNumericOrList(f.elements.droplet_diameter_max_in.value, "Maximum droplet diameter [m]"),
+      droplet_diameter_mean_in: isLiquidJet ? null : parseNumericOrList(f.elements.droplet_diameter_mean_in.value, "Mean droplet diameter [m]"),
+      droplet_diameter_max_in:  isLiquidJet ? null : parseNumericOrList(f.elements.droplet_diameter_max_in.value, "Maximum droplet diameter [m]"),
     },
     models: {
       coupling_mode:         couplingMode,
@@ -483,8 +997,8 @@ function readConditionsFormForRun() {
       khrt_B0:               parseNumericOrList(f.elements.khrt_B0.value, "KH wavelength coefficient B₀", { optional: true }),
       khrt_B1:               parseNumericOrList(f.elements.khrt_B1.value, "KH breakup time coefficient B₁", { optional: true }),
       khrt_Crt:              parseNumericOrList(f.elements.khrt_Crt.value, "RT wavelength coefficient C_RT", { optional: true }),
-      liquid_density:        parseNumericOrList(f.elements.liquid_density.value, "Liquid density [kg/m³]", { optional: true }),
-      liquid_viscosity:      parseNumericOrList(f.elements.liquid_viscosity.value, "Liquid viscosity [Pa·s]", { optional: true }),
+      liquid_density:        parseNumericOrList(f.elements.khrt_liquid_density?.value, "Liquid density [kg/m³] (KH-RT)", { optional: true }),
+      liquid_viscosity:      parseNumericOrList(f.elements.khrt_liquid_viscosity?.value, "Liquid viscosity [Pa·s] (KH-RT)", { optional: true }),
     },
   };
   const wetness = parseNumericOrList(f.elements.inlet_wetness.value, "Inlet wetness", { optional: true });
@@ -509,6 +1023,8 @@ function readConditionsFormForRun() {
 function readConditionsFormForSave() {
   const f = document.getElementById("conditions-form");
   const couplingMode = f.elements.coupling_mode.value;
+  const injectionMode = (f.elements.injection_mode && f.elements.injection_mode.value) || "droplet_injection";
+  const isLiquidJet = injectionMode === "liquid_jet_injection";
   const cfg = {
     fluid: { working_fluid: f.elements.working_fluid.value },
     boundary_conditions: {
@@ -517,8 +1033,10 @@ function readConditionsFormForSave() {
       Ps_out: parseNumericOrList(f.elements.Ps_out.value, "Outlet static pressure P₂ [Pa]"),
     },
     droplet_injection: {
-      droplet_velocity_in: parseNumericOrList(f.elements.droplet_velocity_in.value, "Initial droplet velocity [m/s]"),
-      injection_mode:       (f.elements.injection_mode && f.elements.injection_mode.value) || "droplet_injection",
+      droplet_velocity_in: isLiquidJet ? null : parseNumericOrList(f.elements.droplet_velocity_in.value, "Initial droplet velocity [m/s]"),
+      injection_mode:       injectionMode,
+      input_basis:          getSelectedInputBasis(f),
+      liquid_material:      (f.elements.liquid_material && f.elements.liquid_material.value) || "water",
       liquid_jet_diameter:  parseNumericOrList(f.elements.liquid_jet_diameter?.value, "Liquid-jet diameter [m]", { optional: true }),
       liquid_mass_flow_rate: parseNumericOrList(f.elements.liquid_mass_flow_rate?.value, "Liquid mass flow rate [kg/s]", { optional: true }),
       liquid_velocity:      parseNumericOrList(f.elements.liquid_velocity?.value, "Liquid velocity [m/s]", { optional: true }),
@@ -528,8 +1046,8 @@ function readConditionsFormForSave() {
       primary_breakup_model: (f.elements.primary_breakup_model && f.elements.primary_breakup_model.value) || null,
       primary_breakup_coefficient: parseNumericOrList(f.elements.primary_breakup_coefficient?.value, "Primary breakup coefficient", { optional: true }),
       initial_SMD_model:    (f.elements.initial_SMD_model && f.elements.initial_SMD_model.value) || null,
-      droplet_diameter_mean_in: parseNumericOrList(f.elements.droplet_diameter_mean_in.value, "Mean droplet diameter [m]"),
-      droplet_diameter_max_in: parseNumericOrList(f.elements.droplet_diameter_max_in.value, "Maximum droplet diameter [m]"),
+      droplet_diameter_mean_in: isLiquidJet ? null : parseNumericOrList(f.elements.droplet_diameter_mean_in.value, "Mean droplet diameter [m]"),
+      droplet_diameter_max_in: isLiquidJet ? null : parseNumericOrList(f.elements.droplet_diameter_max_in.value, "Maximum droplet diameter [m]"),
     },
     models: {
       coupling_mode: couplingMode,
@@ -540,8 +1058,8 @@ function readConditionsFormForSave() {
       khrt_B0: parseNumericOrList(f.elements.khrt_B0.value, "KH wavelength coefficient B₀", { optional: true }),
       khrt_B1: parseNumericOrList(f.elements.khrt_B1.value, "KH breakup time coefficient B₁", { optional: true }),
       khrt_Crt: parseNumericOrList(f.elements.khrt_Crt.value, "RT wavelength coefficient C_RT", { optional: true }),
-      liquid_density: parseNumericOrList(f.elements.liquid_density.value, "Liquid density [kg/m³]", { optional: true }),
-      liquid_viscosity: parseNumericOrList(f.elements.liquid_viscosity.value, "Liquid viscosity [Pa·s]", { optional: true }),
+      liquid_density: parseNumericOrList(f.elements.khrt_liquid_density?.value, "Liquid density [kg/m³] (KH-RT)", { optional: true }),
+      liquid_viscosity: parseNumericOrList(f.elements.khrt_liquid_viscosity?.value, "Liquid viscosity [Pa·s] (KH-RT)", { optional: true }),
       tab_reduction_fraction: parseNumericOrList(f.elements.tab_reduction_fraction.value, "TAB reduction fraction", { optional: true }),
       tab_spring_k: parseNumericOrList(f.elements.tab_spring_k.value, "TAB spring constant (k)", { optional: true }),
       tab_damping_c: parseNumericOrList(f.elements.tab_damping_c.value, "TAB damping (c)", { optional: true }),
@@ -576,10 +1094,10 @@ function readConditionsFormForSave() {
 }
 
 async function buildRunConfigSnapshot() {
-  const current = { ...readConditionsFormForRun(), ...readGridForm() };
+  const current = normalizeLiquidJetConfig({ ...readConditionsFormForRun(), ...readGridForm() });
   try {
-    const existing = await apiFetch(`/api/cases/${encodeURIComponent(activeCaseName)}`);
-    const merged = mergeCaseConfigs(existing, current);
+    const existing = await apiFetch(projectCaseUrl(getActiveProjectName(), activeCaseName));
+    const merged = normalizeLiquidJetConfig(mergeCaseConfigs(existing, current));
     assertTwoWayMassFlowRequirement(merged);
     assertLiquidJetRequirement(merged);
     return merged;
@@ -594,13 +1112,13 @@ document.getElementById("btn-save-conditions").addEventListener("click", async (
   if (!activeCaseName) { alert("Select or create a case first."); return; }
   const statusEl = document.getElementById("conditions-status");
   try {
-    const condCfg = readConditionsFormForSave();
+    const condCfg = normalizeLiquidJetConfig(readConditionsFormForSave());
     // Merge with existing grid config
-    const existing = await apiFetch(`/api/cases/${encodeURIComponent(activeCaseName)}`);
-    const merged = mergeCaseConfigs(existing, condCfg);
+    const existing = await apiFetch(projectCaseUrl(getActiveProjectName(), activeCaseName));
+    const merged = normalizeLiquidJetConfig(mergeCaseConfigs(existing, condCfg));
     // Validate liquid-jet requirements on save as well
     assertLiquidJetRequirement(merged);
-    await apiFetch(`/api/cases/${encodeURIComponent(activeCaseName)}`, {
+    await apiFetch(projectCaseUrl(getActiveProjectName(), activeCaseName), {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(merged),
@@ -767,9 +1285,9 @@ document.getElementById("btn-save-grid").addEventListener("click", async () => {
   const statusEl = document.getElementById("grid-status");
   try {
     const gridCfg = readGridForm();
-    const existing = await apiFetch(`/api/cases/${encodeURIComponent(activeCaseName)}`);
+    const existing = await apiFetch(projectCaseUrl(getActiveProjectName(), activeCaseName));
     const merged = mergeCaseConfigs(existing, gridCfg);
-    await apiFetch(`/api/cases/${encodeURIComponent(activeCaseName)}`, {
+    await apiFetch(projectCaseUrl(getActiveProjectName(), activeCaseName), {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(merged),
@@ -798,7 +1316,7 @@ btnRun.addEventListener("click", async () => {
     const data = await apiFetch("/api/simulation/run", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ case_name: activeCaseName, config: runConfig }),
+      body: JSON.stringify({ project_name: getActiveProjectName(), case_name: activeCaseName, config: runConfig }),
     });
     currentJobId = data.job_id;
     startPolling(currentJobId);
@@ -895,6 +1413,42 @@ if (injSelect) {
   injSelect.addEventListener("change", (ev) => updateInjectionModeState(ev.target.value));
 }
 
+const liquidMaterialSelect = document.getElementById("liquid-material-select");
+if (liquidMaterialSelect) {
+  liquidMaterialSelect.addEventListener("change", (ev) => {
+    updateLiquidMaterialState(ev.target.value);
+    recomputeLiquidJetDerivedField();
+  });
+}
+
+document.querySelectorAll("input[name='input_basis']").forEach(el => {
+  el.addEventListener("change", () => {
+    updateLiquidJetInputModeUI();
+    recomputeLiquidJetDerivedField();
+  });
+});
+
+["liquid-jet-diameter-input", "liquid-mass-flow-input", "liquid-velocity-input", "liquid-density-input"].forEach(id => {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.addEventListener("input", recomputeLiquidJetDerivedField);
+});
+
+const waterMassFlowModeSelect = document.getElementById("water-mass-flow-mode-select");
+if (waterMassFlowModeSelect) {
+  waterMassFlowModeSelect.addEventListener("change", updateWaterMassFlowSectionUI);
+}
+
+updateLiquidMaterialState(liquidMaterialSelect?.value || "water");
+updateLiquidJetInputModeUI();
+recomputeLiquidJetDerivedField();
+updateWaterMassFlowSectionUI();
+updateInletWetnessState(document.getElementById("conditions-form")?.elements.working_fluid?.value || "air");
+
+if (injSelect) {
+  updateInjectionModeState(injSelect.value);
+}
+
 // ── Post tab 1: Graphs ─────────────────────────────────────────────────────
 function renderPlots(fields) {
   // Build checkboxes
@@ -967,7 +1521,8 @@ document.getElementById("btn-download-csv").addEventListener("click", () => {
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement("a");
   a.href     = url;
-  a.download = (activeCaseName || "result") + ".csv";
+  const projectPrefix = activeProjectName ? `${activeProjectName}_` : "";
+  a.download = `${projectPrefix}${activeCaseName || "result"}.csv`;
   a.click();
   URL.revokeObjectURL(url);
 });
@@ -1024,6 +1579,6 @@ document.getElementById("btn-save-units").addEventListener("click", async () => 
 
 // ── Initialisation ─────────────────────────────────────────────────────────
 (async function init() {
-  await loadCaseList();
+  await loadProjectList();
   await loadUnitGroups();
 })();
