@@ -681,96 +681,135 @@ To support robust validation of the quasi-1D solver for converging-diverging Lav
 
 ### B.1 Purpose
 
-The GUI extension provides a browser-based interactive interface for the simulator, enabling case management, condition setup, solver execution monitoring, and result visualization without requiring CLI or YAML knowledge from the user.
+The GUI extension provides a browser-based interactive interface for the simulator, enabling project/case management, condition setup, solver execution monitoring, and result visualization without requiring CLI or YAML knowledge from the user.
+
+The current primary GUI implementation is the FastAPI-based browser UI. Streamlit remains a legacy-compatible prototype path and does not define the current browser behavior.
 
 ### B.2 Layout Overview
 
 ```
 ┌──────────────────┬───────────────────────────────────────────────────┐
 │  Left Panel      │  Main Area                                        │
-│  (fixed)         │                                                   │
+│  (resizable)     │                                                   │
 │                  │  ┌─[ Pre ]───────────────────────────────────┐   │
-│  Case list       │  │  Tab1: Analysis Conditions                │   │
-│  ─────────       │  │  Tab2: Grid Definition                    │   │
-│  ○ case_001     │  └───────────────────────────────────────────┘   │
-│  ○ case_002     │                                                   │
-│  ● case_003     │  ┌─[ Solve ]─────────────────────────────────┐   │
+│  Project Explorer│ │  Tab1: Analysis Conditions                │   │
+│  ─────────────── │ │  Tab2: Grid Definition                    │   │
+│  PRJ default     │ └───────────────────────────────────────────┘   │
+│   └ CASE TEST001 │                                                   │
+│  PRJ 001_Base    │  ┌─[ Solve ]─────────────────────────────────┐   │
+│   └ CASE TEST002 │  │  Run / Status / Completion / Diagnostics  │   │
 │                  │  │  Run / Status / Completion / Diagnostics  │   │
-│  [+ New Case]    │  │  Polling / Result Ready                    │   │
-│  [Open Case]     │  └───────────────────────────────────────────┘   │
+│  Context actions │  │  Polling / Result Ready                    │   │
+│  Drag case move  │  └───────────────────────────────────────────┘   │
 │                  │                                                   │
 │                  │  ┌─[ Post ]──────────────────────────────────┐   │
 │                  │  │  Tab1: Graphs                             │   │
 │                  │  │  Tab2: Results Table                      │   │
+│                  │  │  Tab3: Report                             │   │
+│                  │  └───────────────────────────────────────────┘   │
+│                  │                                                   │
+│                  │  ┌─[ Chat ]──────────────────────────────────┐   │
+│                  │  │  Case-aware LLM discussion panel          │   │
+│                  │  │  Resizable right sidebar                  │   │
+│                  │  │  Text + voice input                       │   │
 │                  │  └───────────────────────────────────────────┘   │
 └──────────────────┴───────────────────────────────────────────────────┘
 ```
 
 ### B.3 Left Panel — Case Management
 
-- [ ] The GUI shall display a list of all saved simulation cases.
-- [ ] The user shall be able to create a new case with a unique name.
-- [ ] The user shall be able to open (load) an existing case and restore its conditions.
-- [ ] The currently active case shall be visually highlighted.
-- [ ] Case state shall persist across sessions using a local YAML-backed case store.
+- [x] The GUI shall display saved inputs through a two-level `Project > Case` explorer.
+- [x] The user shall be able to create a new project and a new case with unique names.
+- [x] The user shall be able to open (load) an existing case and restore its conditions.
+- [x] The currently active case shall be visually highlighted.
+- [x] Case state shall persist across sessions using a local YAML-backed case store.
+- [x] The explorer shall expose project and case maintenance actions through a context menu.
+- [x] The GUI shall support project and case rename operations without bypassing the case-store boundary.
+- [x] The GUI shall support case duplication, case YAML export, project ZIP export, and delete operations.
+- [x] Legacy flat `cases/*.yaml` files shall remain readable and shall be materialized into the logical `default` project for canonical GUI storage.
+- [x] The user shall be able to move a case between projects by dragging a case node onto a target project node.
+- [x] The left explorer width shall be adjustable by mouse dragging.
 
 ### B.4 Pre Tab 1 — Analysis Conditions
 
 The user shall be able to set all required simulation inputs through form controls:
 
-- [ ] Working fluid selection: `air` or `steam`.
-- [ ] Inlet total temperature $T_0$ (K).
-- [ ] Inlet total pressure $P_0$ (Pa).
-- [ ] Outlet static pressure $P_2$ (Pa).
-- [ ] Droplet injection conditions: initial velocity, mean diameter, maximum diameter.
-- [ ] Breakup model parameters: critical Weber number, breakup factor mean, breakup factor max.
-- [ ] Optional: inlet wetness (steam cases only).
-- [ ] Numeric condition fields shall accept either a single SI value or multiple SI values entered as comma-, space-, semicolon-, or newline-separated tokens.
-- [ ] Multi-value numeric entries in the Conditions UI shall define a GUI-side parameter sweep for Solve-tab execution and shall not require separate case files.
-- [ ] Input validation shall be performed before the Solve tab becomes active.
-- [ ] All fields shall display SI unit labels.
+- [x] Working fluid selection: `air` or `steam`.
+- [x] Inlet total temperature $T_0$ (K).
+- [x] Inlet total pressure $P_0$ (Pa).
+- [x] Outlet static pressure $P_2$ (Pa).
+- [x] Droplet injection conditions: initial velocity, mean diameter, maximum diameter.
+- [x] Breakup model parameters: critical Weber number, breakup factor mean, breakup factor max.
+- [x] Optional: inlet wetness (steam cases only).
+- [x] Numeric condition fields shall accept either a single SI value or multiple SI values entered as comma-, space-, semicolon-, or newline-separated tokens.
+- [x] Multi-value numeric entries in the Conditions UI shall define a GUI-side parameter sweep for Solve-tab execution and shall not require separate case files.
+- [x] The GUI shall expose `injection_mode` and show only the mode-relevant liquid or droplet fields.
+- [x] Input validation shall be performed before the Solve tab becomes active.
+- [x] All fields shall display SI unit labels.
 
 ### B.5 Pre Tab 2 — Grid Definition
 
-- [ ] The user shall be able to define the axial domain extents ($x_{start}$, $x_{end}$) and cell count.
-- [ ] The user shall be able to enter a tabulated area distribution $(x, A)$ as an editable table.
-- [ ] The GUI shall display a preview plot of the area profile $A(x)$.
-- [ ] The GUI shall reject nonpositive area values with an inline error message.
+- [x] The user shall be able to define the axial domain extents ($x_{start}$, $x_{end}$) and cell count.
+- [x] The user shall be able to enter a tabulated area distribution $(x, A)$ as an editable table.
+- [x] The GUI shall display a preview plot of the area profile $A(x)$.
+- [x] The GUI shall reject nonpositive area values with an inline error message.
+- [ ] The Grid tab shall display an explicit `x` vs `Area` figure based on the current tabulated area data.
 
 ### B.6 Solve Tab — Solver Execution
 
 > **MVP note:** The quasi-1D solver uses a spatial marching method, not an iterative convergence loop. The MVP GUI therefore exposes run control, status, completion outcome, diagnostics, and user-readable errors rather than iteration-based convergence controls.
 
-- [ ] The GUI shall provide a **Run** button that invokes the simulation engine.
-- [ ] The GUI shall display solver progress or status during execution.
-- [ ] The GUI shall display a run-progress indicator showing whether a run is in progress or complete.
-- [ ] The GUI shall report solver completion status: success, validation outcome, and output location.
-- [ ] The GUI shall report solver errors in a user-readable format.
-- [ ] The Run button shall be disabled while a simulation is in progress.
-- [ ] When one or more numeric condition fields contain multiple values, the Solve tab shall expand those values into a parameter sweep over the Cartesian product of the entered value lists.
-- [ ] The Solve tab shall validate multi-value numeric tokens before the run starts and shall reject malformed tokens or excessive sweep sizes with a user-readable error.
-- [ ] Each expanded run shall use an immutable copy-on-run payload so later UI edits do not affect in-flight runs.
-- [ ] Solve status shall summarize the number of expanded runs executed for the current sweep.
+- [x] The GUI shall provide a **Run** button that invokes the simulation engine.
+- [x] The GUI shall display solver progress or status during execution.
+- [x] The GUI shall display a run-progress indicator showing whether a run is in progress or complete.
+- [x] The GUI shall report solver completion status: success, validation outcome, and output location.
+- [x] The GUI shall report solver errors in a user-readable format.
+- [x] The Run button shall be disabled while a simulation is in progress.
+- [x] When one or more numeric condition fields contain multiple values, the Solve tab shall expand those values into a parameter sweep over the Cartesian product of the entered value lists.
+- [x] The Solve tab shall validate multi-value numeric tokens before the run starts and shall reject malformed tokens or excessive sweep sizes with a user-readable error.
+- [x] Each expanded run shall use an immutable copy-on-run payload so later UI edits do not affect in-flight runs.
+- [x] Solve status shall summarize the number of expanded runs executed for the current sweep.
+- [x] The GUI shall generate a report view automatically from the latest completed result for the active case.
 
 ### B.7 Post Tab 1 — Graphs
 
-- [ ] The GUI shall display axial profile plots for all required MVP output quantities:
+- [x] The GUI shall display axial profile plots for all required MVP output quantities:
   - pressure, temperature, working fluid velocity, droplet velocity,
    - slip velocity, surface tension,
    - Mach number, droplet mean diameter, droplet maximum diameter, Weber number.
-- [ ] The user shall be able to select which quantities to display.
-- [ ] The plots shall update automatically after each completed run.
-- [ ] The user shall be able to export displayed plots as PNG files.
-- [ ] When Solve executes multiple expanded runs, the Graphs tab shall overlay those runs on the same axes with a legend derived from the varied parameter values.
+- [x] The user shall be able to select which quantities to display.
+- [x] The plots shall update automatically after each completed run.
+- [x] The user shall be able to export displayed plots as PNG files.
+- [x] When Solve executes multiple expanded runs, the Graphs tab shall overlay those runs on the same axes with a legend derived from the varied parameter values.
+- [ ] The Graphs tab shall include `x` vs `Area Profile` as a selectable plot item and place it first in the default plot order.
 
 ### B.8 Post Tab 2 — Results Table
 
-- [ ] The GUI shall display a tabular view of all axial result fields.
-- [ ] The table shall be scrollable and show all $x$ positions.
-- [ ] The user shall be able to export the results table as CSV.
-- [ ] When Solve executes multiple expanded runs, the results table shall aggregate all runs and include a run-label column identifying the varied parameter combination for each row.
+- [x] The GUI shall display a tabular view of all axial result fields.
+- [x] The table shall be scrollable and show all $x$ positions.
+- [x] The user shall be able to export the results table as CSV.
+- [x] When Solve executes multiple expanded runs, the results table shall aggregate all runs and include a run-label column identifying the varied parameter combination for each row.
 
-### B.9 GUI Constraints
+### B.9 Post Tab 3 — Report
+
+- [x] The GUI shall provide a `Report` tab to the right of the `Table` tab.
+- [x] The Report tab shall be generated from the latest completed result for the active case without recomputing solver physics.
+- [x] The Report tab shall include sections for `Summary Conditions`, `Grid`, `Graph`, `Table`, `Discussion`, and `Conclusion`.
+- [x] The Graph section shall reuse the already-generated plot outputs for the active result.
+- [x] The Table section shall summarize the latest table payload and indicate whether CSV export is available.
+
+### B.10 Right-Side Chat Panel
+
+- [ ] The GUI shall provide a right-side chat panel whose width can be adjusted by mouse dragging.
+- [ ] The chat panel shall remain bound to the currently selected case and shall identify that case in the conversation context.
+- [ ] The chat panel shall render messages in a conversational layout with user and assistant turns visually separated.
+- [ ] The upper portion of the panel shall show conversation history and the lower portion shall provide text input.
+- [ ] The chat input area shall support browser-side voice dictation when the browser exposes speech-recognition APIs, with text input remaining available as the fallback path.
+- [ ] The assistant shall receive case-aware context from the selected case and, when available, the latest completed solve result for that case.
+- [ ] LLM invocation shall be routed through a server-side integration boundary so credentials are not exposed to browser JavaScript.
+- [ ] When no LLM backend is configured, the chat panel shall fail gracefully with a user-readable message rather than breaking the rest of the GUI.
+
+### B.11 GUI Constraints
 
 - The GUI must not contain solver, physics, or config-parsing logic.
 - The GUI must invoke the existing application service boundary unchanged.
@@ -781,18 +820,23 @@ The user shall be able to set all required simulation inputs through form contro
 - Technology selection is deferred to architecture planning.
 - Multi-value parsing and parameter-sweep expansion must remain in the GUI/application orchestration layer; the solver engine itself must continue to receive one single-case payload per run.
 - Multi-value text entered in the Conditions UI must remain session-local until Solve expands it; the case store must continue to persist solver-compatible single-case YAML.
+- Explorer actions such as rename, duplicate, export, delete, and inter-project move must route through the case-store and REST boundaries rather than touching files directly from arbitrary UI code.
+- Report generation must consume structured result payloads already available to the GUI and must not introduce a second physics or post-processing code path.
+- Chat requests must not invoke solver code directly from the browser; they may only consume selected-case state and already-available saved/latest-result context through documented GUI-server boundaries.
+- LLM provider credentials must remain server-side and must not be embedded in HTML, CSS, or browser JavaScript.
 
-### B.10 GUI Out of Scope
+### B.12 GUI Out of Scope
 
 - 3D visualization
 - Multi-case comparison view (out of scope for the MVP GUI; may be considered later)
 - Live/streaming solver output during execution
 - User authentication or multi-user support
 - Mobile layout
+- Browser-side direct calls to third-party LLM APIs using exposed credentials
 
 > Same-case parameter sweeps initiated from multi-value numeric entries in the Conditions UI are in scope. A dedicated general-purpose multi-case comparison workspace remains out of scope.
 
-### B.11 Unit Settings
+### B.13 Unit Settings
 
 The GUI shall provide a configurable settings page for display units. All solver inputs and outputs remain in SI units internally; unit selection affects only what is displayed in the Post tabs.
 
@@ -810,10 +854,10 @@ The GUI shall provide a configurable settings page for display units. All solver
 
 **Requirements:**
 
-- [ ] The GUI shall provide a settings page where the user can select display units for each quantity group.
-- [ ] Unit selection shall affect only display outputs (Post tab plots and results table).
-- [ ] All solver inputs and internal computations shall remain in SI units.
-- [ ] Pre-tab condition inputs shall be labeled and accepted in SI units only.
-- [ ] Display unit preferences shall persist within the current browser session.
-- [ ] The results table CSV export shall label column headers with the selected display unit (e.g. `pressure [kPa]`).
-- [ ] The unit settings page shall show the currently selected unit for each group and allow changes.
+- [x] The GUI shall provide a settings page where the user can select display units for each quantity group.
+- [x] Unit selection shall affect only display outputs (Post tab plots and results table).
+- [x] All solver inputs and internal computations shall remain in SI units.
+- [x] Pre-tab condition inputs shall be labeled and accepted in SI units only.
+- [x] Display unit preferences shall persist within the current browser session.
+- [x] The results table CSV export shall label column headers with the selected display unit (e.g. `pressure [kPa]`).
+- [x] The unit settings page shall show the currently selected unit for each group and allow changes.

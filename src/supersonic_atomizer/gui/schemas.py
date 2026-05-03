@@ -47,3 +47,18 @@ class JobStatusResponse(BaseModel):
 class UnitUpdate(BaseModel):
     """Partial unit-preference update — only groups being changed need to be included."""
     model_config = {"extra": "allow"}
+
+
+class ChatMessage(BaseModel):
+    role: str
+    content: str
+
+
+class ChatRequest(BaseModel):
+    case_name: str
+    project_name: str | None = None
+    messages: list[ChatMessage]
+
+
+class ChatReplyResponse(BaseModel):
+    reply: ChatMessage

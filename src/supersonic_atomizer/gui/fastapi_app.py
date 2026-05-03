@@ -24,6 +24,7 @@ def create_app() -> FastAPI:
     ``app`` attribute) and in tests (via ``TestClient(create_app())``).
     """
     from supersonic_atomizer.gui.routers.cases_router import router as cases_r
+    from supersonic_atomizer.gui.routers.chat_router import router as chat_r
     from supersonic_atomizer.gui.routers.index_router import router as index_r
     from supersonic_atomizer.gui.routers.simulation_router import router as sim_r
     from supersonic_atomizer.gui.routers.units_router import router as units_r
@@ -42,6 +43,7 @@ def create_app() -> FastAPI:
     # API routers
     application.include_router(index_r)
     application.include_router(cases_r, prefix="/api/cases", tags=["cases"])
+    application.include_router(chat_r, prefix="/api/chat", tags=["chat"])
     application.include_router(sim_r, prefix="/api/simulation", tags=["simulation"])
     application.include_router(units_r, prefix="/api/units", tags=["units"])
 

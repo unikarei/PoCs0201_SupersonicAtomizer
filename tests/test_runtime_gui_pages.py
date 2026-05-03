@@ -200,6 +200,7 @@ def test_persist_state_to_case_writes_yaml(sample_state: GUIState, case_store: C
 def test_extract_plot_series(sample_result: SimulationResult) -> None:
     series = extract_plot_series(sample_result)
     assert set(series.keys()) == {
+        "area_profile",
         "pressure",
         "temperature",
         "working_fluid_velocity",
@@ -210,6 +211,7 @@ def test_extract_plot_series(sample_result: SimulationResult) -> None:
         "droplet_maximum_diameter",
         "Weber_number",
     }
+    assert series["area_profile"]["y"] == [1.0e-4, 8.0e-5]
     assert series["pressure"]["x"] == [0.0, 0.1]
 
 

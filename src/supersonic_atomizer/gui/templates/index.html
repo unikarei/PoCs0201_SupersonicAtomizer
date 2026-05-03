@@ -13,36 +13,17 @@
 
   <!-- Left panel: case management -->
   <aside class="left-panel">
-    <h2>Projects</h2>
-    <label class="sidebar-label" for="project-select">Active project</label>
-    <select id="project-select" class="sidebar-select"></select>
-    <div class="case-actions">
-      <input id="new-project-name" type="text" placeholder="project name" />
-      <button id="btn-new-project">＋ New project</button>
+    <h2>Project Explorer</h2>
+    <p class="sidebar-hint">Right-click a project or case to create, rename, export, duplicate, or delete.</p>
+    <div id="project-tree-shell" class="tree-shell" tabindex="0" aria-label="Project and case explorer">
+      <ul id="project-case-tree" class="tree-view" role="tree" aria-label="Project and case tree"></ul>
     </div>
-    <div class="case-actions case-tools">
-      <button id="btn-rename-project" type="button">Rename project</button>
-      <button id="btn-delete-project" type="button">Delete project</button>
-      <button id="btn-export-project" type="button">Export project</button>
-    </div>
-    <hr />
-    <h2>Cases</h2>
-    <ul id="case-list" class="case-list"></ul>
-    <div class="case-actions">
-      <input id="new-case-name" type="text" placeholder="case name" />
-      <button id="btn-new-case">＋ New case</button>
-      <button id="btn-refresh-cases">↺ Refresh</button>
-    </div>
-    <div class="case-actions case-tools">
-      <button id="btn-rename-case" type="button">Rename case</button>
-      <button id="btn-duplicate-case" type="button">Duplicate case</button>
-      <button id="btn-delete-case" type="button">Delete case</button>
-      <button id="btn-export-case" type="button">Export YAML</button>
-    </div>
+    <div id="tree-context-menu" class="tree-context-menu hidden" role="menu" aria-label="Project and case actions"></div>
     <div id="case-error" class="error-msg hidden"></div>
     <hr />
     <p id="active-case-label" class="active-case">No case selected</p>
   </aside>
+  <div id="left-panel-resize-handle" class="panel-resize-handle" role="separator" aria-label="Resize project explorer" aria-orientation="vertical"></div>
 
   <!-- Main area -->
   <main class="main-area">
@@ -54,6 +35,7 @@
       <button class="tab-btn" data-tab="solve">▶ Solve</button>
       <button class="tab-btn" data-tab="post-graphs">📈 Graphs</button>
       <button class="tab-btn" data-tab="post-table">📊 Table</button>
+      <button class="tab-btn" data-tab="post-report">📝 Report</button>
       <button class="tab-btn" data-tab="settings">⚙ Settings</button>
     </nav>
 
@@ -285,6 +267,7 @@
 
         <fieldset>
           <legend>Area Profile Preview</legend>
+          <p class="chart-caption">x vs Area figure for the current grid definition.</p>
           <canvas id="area-preview-canvas" width="480" height="200"></canvas>
         </fieldset>
 
@@ -336,6 +319,15 @@
       </div>
     </section>
 
+    <!-- ── Post Tab 3: Report ───────────────────────────────────────────────── -->
+    <section id="tab-post-report" class="tab-content hidden">
+      <h3>Simulation Report</h3>
+      <p class="help-text">A report is generated automatically from the latest completed solve result for the active case.</p>
+      <div id="report-content" class="report-content">
+        <div class="report-empty">Run Solve to generate a report.</div>
+      </div>
+    </section>
+
     <!-- ── Settings Tab ─────────────────────────────────────────────────────── -->
     <section id="tab-settings" class="tab-content hidden">
       <h3>Display Units</h3>
@@ -350,6 +342,29 @@
     </section>
 
   </main>
+
+  <div id="right-panel-resize-handle" class="panel-resize-handle chat-resize-handle" role="separator" aria-label="Resize case chat" aria-orientation="vertical"></div>
+
+  <aside class="chat-panel" aria-label="Case discussion panel">
+    <div class="chat-panel-header">
+      <div>
+        <h2>Case Chat</h2>
+        <p id="chat-case-label" class="chat-case-label">No case selected</p>
+      </div>
+      <button id="btn-clear-chat" type="button" class="chat-clear-btn">Clear</button>
+    </div>
+    <div id="chat-messages" class="chat-messages">
+      <div class="chat-empty">Select a case to discuss it with the assistant.</div>
+    </div>
+    <form id="chat-form" class="chat-form">
+      <textarea id="chat-input" rows="4" placeholder="Discuss the selected case, setup, or latest result."></textarea>
+      <div class="chat-form-actions">
+        <button id="btn-chat-voice" type="button" class="chat-voice-btn">Voice</button>
+        <button id="btn-send-chat" type="submit" class="chat-send-btn">Send</button>
+      </div>
+      <div id="chat-status" class="chat-status"></div>
+    </form>
+  </aside>
 </div>
 
 <!-- ── Breakup Model Help Dialog ───────────────────────────────────────────── -->

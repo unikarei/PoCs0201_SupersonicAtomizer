@@ -263,6 +263,7 @@ class TestOverlayHelpers:
 
         overlay = extract_overlay_plot_series(labeled_results)
 
+        assert "area_profile" in overlay
         assert "pressure" in overlay
         assert "slip_velocity" in overlay
         assert len(overlay["pressure"]["series"]) == 2
@@ -357,6 +358,7 @@ class TestFastApiMultiRunFlow:
 
         assert payload["run_count"] == 2
         assert "pressure" in payload["plots"]
+        assert payload["plot_fields"][0] == "area_profile"
         assert "slip_velocity" in payload["plot_fields"]
         assert payload["table_rows"]
         assert "run_label" in payload["table_rows"][0]

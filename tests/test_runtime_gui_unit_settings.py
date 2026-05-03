@@ -492,11 +492,21 @@ class TestExtractPlotSeriesWithUnits:
     def test_all_required_keys_present_no_prefs(self, sample_result: SimulationResult) -> None:
         series = extract_plot_series(sample_result)
         expected_keys = {
+            "area_profile",
             "pressure", "temperature", "working_fluid_velocity", "droplet_velocity",
             "slip_velocity",
             "Mach_number", "droplet_mean_diameter", "droplet_maximum_diameter", "Weber_number",
         }
         assert set(series.keys()) == expected_keys
+
+    def test_area_profile_uses_area_units(self, sample_result: SimulationResult) -> None:
+        prefs = {
+            "pressure": "kPa", "temperature": "K", "velocity": "m/s",
+            "diameter": "μm", "length": "m", "area": "mm²", "density": "kg/m³",
+        }
+        series = extract_plot_series(sample_result, prefs)
+        assert series["area_profile"]["y"] == pytest.approx([100.0, 80.0])
+        assert "mm²" in series["area_profile"]["ylabel"]
 
     def test_si_values_returned_when_no_prefs(self, sample_result: SimulationResult) -> None:
         series = extract_plot_series(sample_result)
@@ -567,7 +577,7 @@ class TestExtractPlotSeriesWithUnits:
         self, sample_result: SimulationResult, full_prefs: dict
     ) -> None:
         series = extract_plot_series(sample_result, full_prefs)
-        for key in ("pressure", "temperature", "working_fluid_velocity", "droplet_velocity",
+        for key in ("area_profile", "pressure", "temperature", "working_fluid_velocity", "droplet_velocity",
                     "Mach_number", "droplet_mean_diameter", "droplet_maximum_diameter", "Weber_number"):
             assert key in series
 

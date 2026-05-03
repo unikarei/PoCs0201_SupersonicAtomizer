@@ -77,10 +77,16 @@ def _case_ref(project: str, name: str) -> str:
     return f"{project}/{name}"
 
 
+def _materialize_default_project(store: CaseStore) -> None:
+    """Move legacy root-level cases into cases/default/ for canonical GUI storage."""
+    store.migrate_legacy_cases(target_project=store.default_project_name)
+
+
 @router.get("/projects/")
 async def list_projects() -> dict[str, Any]:
     """Return all saved project names and the default project name."""
     store = _get_store()
+    _materialize_default_project(store)
     return {
         "projects": store.list_projects(),
         "default_project": store.default_project_name,

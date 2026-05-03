@@ -1015,27 +1015,27 @@ Phase 25 is done when the FastAPI-based GUI can be launched from a separate scri
 
 Phase 25A is done when the specification, architecture, and task plan use consistent terminology for the CLI MVP, the later GUI extension, FastAPI versus Streamlit roles, solve-tab behavior, case-store persistence, and copy-on-run execution semantics.
 
-- [ ] **P25A-T01 — Align core MVP and GUI scope wording**
+- [x] **P25A-T01 — Align core MVP and GUI scope wording**
   - **Purpose:** Make the release story explicit across the SDD set by separating Core MVP, GUI extension, and later advanced study features.
   - **Dependencies:** P25-T07.
   - **Completion criteria:** `spec.md`, `architecture.md`, and `tasks.md` describe the CLI-focused MVP and later GUI layers without contradictory scope wording.
 
-- [ ] **P25A-T02 — Standardize GUI framework terminology**
+- [x] **P25A-T02 — Standardize GUI framework terminology**
   - **Purpose:** Make FastAPI the current primary GUI architecture while preserving Streamlit as a legacy-compatible prototype/front-end path.
   - **Dependencies:** P25-T07.
   - **Completion criteria:** `architecture.md` clearly distinguishes FastAPI as primary/current and Streamlit as retained compatibility history.
 
-- [ ] **P25A-T03 — Remove obsolete solve-tab convergence wording**
+- [x] **P25A-T03 — Remove obsolete solve-tab convergence wording**
   - **Purpose:** Replace iterative convergence-control language with marching-solver run status, completion outcome, diagnostics, and user-readable error reporting.
   - **Dependencies:** P25-T07.
   - **Completion criteria:** `spec.md`, `architecture.md`, and relevant GUI task text no longer imply max-iteration or convergence-criterion controls for the marching solver.
 
-- [ ] **P25A-T04 — Standardize case-store and run semantics**
+- [x] **P25A-T04 — Standardize case-store and run semantics**
   - **Purpose:** Use local YAML-backed case store terminology consistently and define copy-on-run semantics for in-flight jobs.
   - **Dependencies:** P25-T07.
   - **Completion criteria:** The SDD set uses one case-store term consistently and explicitly states that later case edits do not affect a running job.
 
-- [ ] **P25A-T05 — Reconcile out-of-scope statements**
+- [x] **P25A-T05 — Reconcile out-of-scope statements**
   - **Purpose:** Confirm that multi-case comparison and other non-MVP GUI features remain out of scope unless separately approved.
   - **Dependencies:** P25-T07.
   - **Completion criteria:** The SDD set contains no ambiguous claims that promote unsupported GUI features into the MVP or current GUI scope.
@@ -1336,3 +1336,95 @@ Phase 32 is done when the validation layer supports a quantitative baseline work
   - **Purpose:** Mark implemented requirements/tasks complete and keep SDD artifacts synchronized with code.
   - **Dependencies:** P32-T05.
   - **Completion criteria:** Phase 32 checkboxes are updated and trace to merged runtime changes.
+
+---
+
+## Phase 33. FastAPI GUI Project Explorer and Report Workflow
+
+### Definition of Done
+
+Phase 33 is done when the FastAPI GUI exposes the case store through a tree-style `Project > Case` explorer with project/case maintenance actions, legacy default-case canonicalization, drag/drop case moves, a mouse-resizable explorer pane, and an auto-generated report tab assembled from the latest completed solve result.
+
+### Phase 33 Prerequisites
+
+- Phase 27 must be complete.
+- Phase 28 may remain available unchanged.
+- The existing application-service, solver, and case-store boundaries must remain intact.
+
+---
+
+- [x] **P33-T01 — Update SDD documents for explorer/report GUI refinements**
+  - **Purpose:** Record the approved scope for tree-style project/case management, legacy-case canonicalization, drag/drop moves, resizable explorer layout, and solve-generated reports before or alongside implementation reconciliation.
+  - **Dependencies:** P27-T05.
+  - **Completion criteria:** `spec.md`, `architecture.md`, and `tasks.md` describe the explorer/report behavior and preserve the existing GUI/application-service boundaries.
+
+- [x] **P33-T02 — Extend case-store and case-router semantics for canonical project hierarchy**
+  - **Purpose:** Keep `cases/<project>/<case>.yaml` as the canonical GUI layout while preserving backward compatibility for legacy flat cases.
+  - **Dependencies:** P33-T01.
+  - **Completion criteria:** Project enumeration materializes legacy `cases/*.yaml` files into `cases/default/`; rename and export operations remain project-aware; tests cover migration and inter-project move behavior.
+
+- [x] **P33-T03 — Implement tree-style Project Explorer with context actions**
+  - **Purpose:** Replace the flat project/case controls with a tree-style explorer that uses context-menu actions for create, rename, duplicate, export, and delete workflows.
+  - **Dependencies:** P33-T02.
+  - **Completion criteria:** The browser UI renders a `Project Explorer`, highlights the active selection, and dispatches all maintenance actions through the documented REST/case-store boundaries.
+
+- [x] **P33-T04 — Add case drag/drop moves and resizable explorer layout**
+  - **Purpose:** Improve browser-side case management usability without widening solver or persistence scope.
+  - **Dependencies:** P33-T03.
+  - **Completion criteria:** Users can drag a case onto another project to move it, and can adjust explorer width with a mouse-driven resize handle; focused GUI tests cover the structural markup required for these behaviors.
+
+- [x] **P33-T05 — Add solve-generated Report tab**
+  - **Purpose:** Provide a report-oriented post-processing view assembled from the latest completed solve result for the active case.
+  - **Dependencies:** P33-T03.
+  - **Completion criteria:** The `Report` tab appears to the right of `Table` and summarizes `Summary Conditions`, `Grid`, `Graph`, `Table`, `Discussion`, and `Conclusion` using existing structured GUI result data.
+
+- [x] **P33-T06 — Add focused tests and verify regression safety**
+  - **Purpose:** Protect tree markup, canonical default-project materialization, inter-project case moves, and report-tab presence while preserving prior GUI behavior.
+  - **Dependencies:** P33-T04, P33-T05.
+  - **Completion criteria:** `tests/test_runtime_gui_fastapi.py` and related GUI regressions cover the new structural/API behavior and the targeted regression suites pass.
+
+---
+
+## Phase 34. GUI Area Visualization and Case-Aware Chat Panel
+
+### Definition of Done
+
+Phase 34 is done when the FastAPI GUI shows `x` vs `Area Profile` in both the Grid and Graphs surfaces, and provides a mouse-resizable right-side chat panel that lets the user discuss the currently selected case with an LLM using text input and browser-side voice dictation.
+
+### Phase 34 Prerequisites
+
+- Phase 33 must be complete.
+- The existing application-service and case-store boundaries must remain intact.
+- Any LLM integration must keep provider credentials on the server side.
+
+---
+
+- [ ] **P34-T01 — Update SDD documents for area-plot and chat-panel scope**
+  - **Purpose:** Record the approved scope and constraints for the new area-plot surfaces and case-aware chat panel before implementation.
+  - **Dependencies:** P33-T06.
+  - **Completion criteria:** `spec.md`, `architecture.md`, and `tasks.md` describe the new UI surfaces, context boundaries, and credential-handling rules consistently.
+
+- [ ] **P34-T02 — Add `Area Profile` to post-run graph generation**
+  - **Purpose:** Surface `x` vs `Area` as a first-class plot derived from structured simulation results.
+  - **Dependencies:** P34-T01.
+  - **Completion criteria:** The Graphs tab can render `Area Profile`, and it appears first in the default plot ordering for single-run and multi-run result payloads.
+
+- [ ] **P34-T03 — Add explicit `x` vs `Area` figure to the Grid tab**
+  - **Purpose:** Make the tabulated geometry easier to inspect before running the solver.
+  - **Dependencies:** P34-T01.
+  - **Completion criteria:** The Grid tab displays an explicit labeled `x` vs `Area` figure that updates from the current area table and remains consistent with saved grid values.
+
+- [ ] **P34-T04 — Add right-side resizable chat panel shell**
+  - **Purpose:** Introduce a ChatGPT-style conversation pane without disturbing the existing explorer/main-area layout.
+  - **Dependencies:** P34-T01.
+  - **Completion criteria:** The browser layout includes a right-side pane with adjustable width, scrollable conversation history, and a bottom input area with text and voice controls.
+
+- [ ] **P34-T05 — Implement case-aware server-side chat integration**
+  - **Purpose:** Let the browser send chat turns to a server-side LLM adapter that receives selected-case context and latest-result context.
+  - **Dependencies:** P34-T04.
+  - **Completion criteria:** Chat requests flow through dedicated FastAPI endpoints and a server-side provider adapter; missing provider configuration returns a user-readable error without breaking the rest of the GUI.
+
+- [ ] **P34-T06 — Add focused tests and verify regression safety**
+  - **Purpose:** Protect the new graph ordering, grid figure presence, chat API contract, and right-panel markup while preserving prior GUI behavior.
+  - **Dependencies:** P34-T02, P34-T03, P34-T05.
+  - **Completion criteria:** FastAPI and GUI regression tests cover the new structural/API behavior and the targeted regression suites pass.

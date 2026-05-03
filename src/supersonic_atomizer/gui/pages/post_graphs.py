@@ -13,6 +13,7 @@ from supersonic_atomizer.gui.unit_settings import (
 
 
 PLOT_FIELDS: dict[str, tuple[str, str, str]] = {
+    "area_profile":           ("Area Profile",          "area",       "m²"),
     "pressure":               ("Pressure",               "pressure",   "Pa"),
     "temperature":            ("Temperature",            "temperature", "K"),
     "working_fluid_velocity": ("Working-fluid velocity", "velocity",   "m/s"),
@@ -64,6 +65,7 @@ def extract_plot_series(
         return {"x": x_disp, "y": y, "ylabel": ylabel, "title": title, "x_label": x_label}
 
     result = {
+        "area_profile":         _entry(simulation_result.gas_solution.area_values,                         "area",        "Area Profile"),
         "pressure":               _entry(simulation_result.gas_solution.pressure_values,                          "pressure",    "Pressure"),
         "temperature":            _entry(simulation_result.gas_solution.temperature_values,                       "temperature", "Temperature"),
         "working_fluid_velocity": _entry(simulation_result.gas_solution.velocity_values,                          "velocity",    "Working-fluid velocity"),

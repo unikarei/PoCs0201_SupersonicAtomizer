@@ -41,6 +41,8 @@ from supersonic_atomizer.gui.job_store import JobRecord, JobStore, get_job_store
 from supersonic_atomizer.gui.plot_utils import figure_to_base64, figure_to_data_url
 from supersonic_atomizer.gui.schemas import (
     CaseCreateRequest,
+    ChatReplyResponse,
+    ChatRequest,
     JobStatusResponse,
     RunRequest,
     UnitUpdate,
@@ -239,6 +241,15 @@ class TestSchemas:
         u = UnitUpdate(**{"pressure": "kPa", "temperature": "°C"})
         assert u.model_extra["pressure"] == "kPa"
 
+    def test_chat_request(self):
+        req = ChatRequest(case_name="my_case", messages=[{"role": "user", "content": "status?"}])
+        assert req.case_name == "my_case"
+        assert req.messages[0].role == "user"
+
+    def test_chat_reply_response(self):
+        resp = ChatReplyResponse(reply={"role": "assistant", "content": "hello"})
+        assert resp.reply.content == "hello"
+
 
 # ============================================================================
 # 5. FastAPI application factory tests
@@ -258,6 +269,7 @@ class TestFastAPIAppFactory:
         paths = {r.path for r in app.routes}
         assert "/" in paths
         assert "/api/cases/" in paths
+        assert "/api/chat/messages" in paths
         assert "/api/simulation/run" in paths
         assert "/api/units/preferences" in paths
 
@@ -280,14 +292,18 @@ def app_with_tmp_store(tmp_path_factory):
 
     app = create_app()
     import supersonic_atomizer.gui.routers.cases_router as _cr
+    import supersonic_atomizer.gui.routers.chat_router as _chr
     import supersonic_atomizer.gui.routers.simulation_router as _sr
     original_cr = _cr._get_store
+    original_chr = _chr._get_store
     original_sr_cls = _sr.CaseStore
     _cr._get_store = _get_store_func
+    _chr._get_store = _get_store_func
     _sr.CaseStore = lambda: store
     yield app, tmp_dir
     # Restore
     _cr._get_store = original_cr
+    _chr._get_store = original_chr
     _sr.CaseStore = original_sr_cls
 
 
@@ -306,6 +322,20 @@ class TestIndexEndpoint:
         assert resp.status_code == 200
         assert "text/html" in resp.headers["content-type"]
         assert b"Supersonic Atomizer" in resp.content
+
+    def test_get_root_contains_project_case_tree_markup(self, client):
+        resp = client.get("/")
+        assert resp.status_code == 200
+        html = resp.text
+        assert 'id="project-case-tree"' in html
+        assert 'id="tree-context-menu"' in html
+        assert 'id="left-panel-resize-handle"' in html
+        assert 'id="right-panel-resize-handle"' in html
+        assert 'id="chat-messages"' in html
+        assert 'id="chat-form"' in html
+        assert 'data-tab="post-report"' in html
+        assert 'id="report-content"' in html
+        assert "Right-click a project or case" in html
 
     def test_get_favicon_returns_no_content(self, client):
         resp = client.get("/favicon.ico")
@@ -362,6 +392,15 @@ class TestCasesEndpoints:
         data = resp.json()
         assert "projects" in data
         assert "default_project" in data
+
+    def test_list_projects_materializes_legacy_default_cases(self, client, app_with_tmp_store):
+        _, tmp_dir = app_with_tmp_store
+        legacy_case = tmp_dir / "legacy_case.yaml"
+        legacy_case.write_text("fluid:\n  working_fluid: air\n", encoding="utf-8")
+        resp = client.get("/api/cases/projects/")
+        assert resp.status_code == 200
+        assert not legacy_case.exists()
+        assert (tmp_dir / "default" / "legacy_case.yaml").exists()
 
     def test_create_project(self, client):
         resp = client.post("/api/cases/projects/", json={"name": "proj_fastapi"})
@@ -423,6 +462,20 @@ class TestCasesEndpoints:
         assert resp.status_code == 200
         listed = client.get("/api/cases/projects/proj_rename_case/cases/").json()["cases"]
         assert "case_b" in listed
+
+    def test_move_project_case_between_projects(self, client):
+        client.post("/api/cases/projects/", json={"name": "proj_source"})
+        client.post("/api/cases/projects/", json={"name": "proj_target"})
+        client.post("/api/cases/projects/proj_source/cases/", json={"name": "case_a"})
+        resp = client.post(
+            "/api/cases/projects/proj_source/cases/case_a/rename",
+            json={"new_name": "case_a", "target_project": "proj_target"},
+        )
+        assert resp.status_code == 200
+        source_cases = client.get("/api/cases/projects/proj_source/cases/").json()["cases"]
+        target_cases = client.get("/api/cases/projects/proj_target/cases/").json()["cases"]
+        assert "case_a" not in source_cases
+        assert "case_a" in target_cases
 
     def test_export_project_case(self, client):
         client.post("/api/cases/projects/", json={"name": "proj_export"})
@@ -502,6 +555,42 @@ class TestSimulationEndpoints:
         )
         assert resp.status_code == 200
         uuid.UUID(resp.json()["job_id"])
+
+
+class TestChatEndpoints:
+
+    def test_send_chat_message_returns_reply(self, client, monkeypatch):
+        from supersonic_atomizer.gui.routers import chat_router
+
+        client.post("/api/cases/projects/", json={"name": "chat_proj"})
+        client.post("/api/cases/projects/chat_proj/cases/", json={"name": "chat_case"})
+
+        mock_service = MagicMock()
+        mock_service.generate_reply.return_value = "Case looks stable."
+        monkeypatch.setattr(chat_router, "_chat_service", mock_service)
+
+        resp = client.post(
+            "/api/chat/messages",
+            json={
+                "project_name": "chat_proj",
+                "case_name": "chat_case",
+                "messages": [{"role": "user", "content": "Summarize this case."}],
+            },
+        )
+
+        assert resp.status_code == 200
+        assert resp.json()["reply"] == {"role": "assistant", "content": "Case looks stable."}
+        mock_service.generate_reply.assert_called_once()
+
+    def test_send_chat_message_missing_case_returns_404(self, client):
+        resp = client.post(
+            "/api/chat/messages",
+            json={
+                "case_name": "missing_case",
+                "messages": [{"role": "user", "content": "hello"}],
+            },
+        )
+        assert resp.status_code == 404
 
 
 class TestUnitsEndpoints:

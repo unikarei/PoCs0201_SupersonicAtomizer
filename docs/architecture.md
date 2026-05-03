@@ -877,18 +877,24 @@ The GUI package shall be organized under `src/supersonic_atomizer/gui/`.
 
 | Module | Responsibility |
 |---|---|
-| `gui/app.py` | Application entry point; assembles and launches the GUI |
-| `gui/layout.py` | Top-level layout: left panel + main area composition |
-| `gui/panels/case_panel.py` | Left panel: case list, new case, open case |
-| `gui/pages/pre_conditions.py` | Pre Tab 1: analysis condition form controls |
-| `gui/pages/pre_grid.py` | Pre Tab 2: grid definition table and area preview |
-| `gui/pages/solve.py` | Solve tab: run button, status, completion outcome, diagnostics |
-| `gui/pages/post_graphs.py` | Post Tab 1: axial profile plots |
-| `gui/pages/post_table.py` | Post Tab 2: results table and CSV export |
+| `gui/fastapi_app.py` | FastAPI application factory; mounts routers, templates, and static assets |
+| `gui/routers/index_router.py` | Serves the main single-page browser shell |
+| `gui/routers/cases_router.py` | Project/case CRUD, rename, duplicate/export, move, and legacy-case materialization endpoints |
+| `gui/routers/simulation_router.py` | Run/status/result endpoints and job polling contract |
+| `gui/routers/units_router.py` | Unit preference REST endpoints |
+| `gui/routers/chat_router.py` | Case-aware chat-history and LLM message endpoints |
+| `gui/templates/index.html` | Main browser layout: project explorer, tabs, and report container |
+| `gui/static/app.js` | Client-side state, tree/context-menu actions, drag/drop move, solve polling, report rendering, and chat panel behavior |
+| `gui/static/app.css` | Browser layout, explorer styling, resize handles, report presentation, and chat panel styling |
+| `gui/job_store.py` | Thread-safe in-memory simulation job store |
+| `gui/session_store.py` | Server-side session store keyed by cookie/session id |
 | `gui/multi_run.py` | GUI-side numeric-token parsing, sweep expansion, run labeling, and immutable run-snapshot helpers |
-| `gui/case_store.py` | Case persistence: save/load case state across sessions |
+| `gui/case_store.py` | YAML-backed project/case persistence, migration, export, and rename/move operations |
 | `gui/service_bridge.py` | Thin adapter between GUI events and the application service |
-| `gui/state.py` | GUI-side reactive or session state model |
+| `gui/unit_settings.py` | Display-unit groups, conversion helpers, and label formatting |
+| `gui/chat_service.py` | Server-side LLM adapter that builds case-aware prompts and calls a configured provider |
+
+Legacy Streamlit modules (`gui/app.py`, `gui/layout.py`, `gui/panels/`, `gui/pages/`, `gui/state.py`) remain in the repository as a compatibility path, but they are not the current primary browser architecture.
 
 ### B.3 Architectural Boundary Rules
 
@@ -901,6 +907,13 @@ The GUI package shall be organized under `src/supersonic_atomizer/gui/`.
 - The GUI must handle `ApplicationService` errors and surface them as user-readable messages without exposing internal tracebacks.
 - Multi-value numeric token parsing and sweep expansion belong to the GUI/application orchestration boundary only; they must not modify solver internals or case-store persistence rules.
 - Overlay plotting must consume structured per-run `SimulationResult` objects only and must not recompute solver physics.
+- Tree interactions such as right-click menus, rename, duplicate, export, delete, and drag/drop case moves must resolve to REST calls that in turn delegate to `case_store.py`; client code must not mutate the filesystem directly.
+- Legacy flat-case canonicalization into `cases/default/` must occur at the case-store/router boundary, not in arbitrary front-end code.
+- Report generation must remain a pure presentation concern in `gui/static/app.js`, consuming only the latest structured result payload, current form state, and display helpers.
+- Sidebar resizing must remain a browser-layout concern only and must not change case-store, solver, or session semantics.
+- Chat-panel resizing must remain a browser-layout concern only and must not alter case-store, solver, or run semantics.
+- `gui/chat_service.py` must remain an integration boundary above the application service; it may read case-store data and latest completed GUI results but must not execute solver runs.
+- Voice capture must remain browser-side transcription only unless a separately approved server-side audio-processing boundary is introduced later.
 
 ### B.4 GUI Data Flow
 
@@ -910,11 +923,13 @@ User action
   → gui/multi_run.py parses multi-value numeric tokens and expands immutable run payloads
   → gui/service_bridge.py calls ApplicationService once per expanded payload
   → ApplicationService returns one `SimulationRunResult` per expanded payload
-  → GUI layer stores the per-run results and assembles overlay/table view models
+  → GUI layer stores the per-run results and assembles overlay/table/report/chat-context view models
   → GUI pages re-render from state
     → post_graphs.py reads per-run result axial arrays → overlay plots
     → post_table.py reads per-run result axial arrays → aggregated table
     → solve.py reads diagnostics → status display
+    → app.js report helpers read latest result + active form state → report sections
+    → chat_router.py reads selected-case config + latest-result summary → chat_service.py → provider response
 ```
 
 ### B.5 Case Store Design
@@ -924,30 +939,42 @@ User action
 - The canonical on-disk layout is `cases/<project>/<case>.yaml`; legacy flat cases in `cases/*.yaml` remain readable through the default project for backward compatibility.
 - `case_store.py` provides project-aware create, list, load, save, delete, and rename operations.
 - `case_store.py` also owns case duplication, case/project export, project deletion, and legacy flat-case migration into a target project.
+- The canonical GUI storage layout materializes legacy flat cases into `cases/default/<case>.yaml` when the project tree is enumerated.
 - Each case YAML file is structurally identical to the existing input format consumed by `config/loader.py`.
 - The GUI never constructs YAML manually; it translates form state into the internal case model, which is then serialized by `case_store.py`.
 - Multi-value numeric Conditions entries are not persisted as multi-valued YAML scalars; when users want to save a case, the persisted case remains a single solver-compatible case definition.
 - The CLI exposes a maintenance command to migrate legacy `cases/*.yaml` files into `cases/<project>/` without bypassing the case-store boundary.
-- The GUI sidebar exposes project-scoped maintenance actions for renaming/exporting/deleting a project and case-scoped actions for renaming/duplicating/exporting/deleting individual cases.
+- The GUI explorer exposes project-scoped maintenance actions for creating/renaming/exporting/deleting a project and case-scoped actions for creating/renaming/duplicating/exporting/deleting individual cases.
+- Case movement across projects is modeled as a case-store rename with `target_project` semantics, preserving the same ownership boundary as other mutations.
+- The active project/case tree is a presentation of case-store state; expand/collapse state, context-menu state, and sidebar width remain session-local UI concerns.
+- Chat history is session-local UI/application state keyed by browser session and selected case; it must not be persisted into case YAML files.
 
 ### B.6 Directory Structure Addition
 
 ```text
 src/supersonic_atomizer/
   └─ gui/
-      ├─ app.py
-      ├─ layout.py
-      ├─ state.py
+      ├─ fastapi_app.py
+      ├─ dependencies.py
+      ├─ job_store.py
+      ├─ session_store.py
+      ├─ schemas.py
+      ├─ unit_settings.py
       ├─ service_bridge.py
       ├─ case_store.py
-      ├─ panels/
-      │   └─ case_panel.py
-      └─ pages/
-          ├─ pre_conditions.py
-          ├─ pre_grid.py
-          ├─ solve.py
-          ├─ post_graphs.py
-          └─ post_table.py
+      ├─ multi_run.py
+      ├─ routers/
+      │   ├─ index_router.py
+      │   ├─ cases_router.py
+        │   ├─ chat_router.py
+      │   ├─ simulation_router.py
+      │   └─ units_router.py
+        ├─ chat_service.py
+      ├─ templates/
+      │   └─ index.html
+      └─ static/
+          ├─ app.css
+          └─ app.js
 cases/               ← default case-store directory root
   └─ <project>/
        └─ <case>.yaml
@@ -1041,6 +1068,20 @@ The solver is invoked in a background `threading.Thread`. Completion status and 
 `gui/case_store.py`, `gui/service_bridge.py`, `gui/unit_settings.py`, `gui/state.py`,
 `gui/pages/post_graphs.py` (`extract_plot_series`), `gui/pages/post_table.py` (`result_to_table_rows`, `generate_csv_content`),
 `gui/pages/pre_conditions.py`, `gui/pages/pre_grid.py`, `gui/pages/solve.py`, `gui/panels/case_panel.py`.
+
+**Current browser-UI additions (Phase 33):**
+
+- `gui/templates/index.html` provides a tree-style `Project Explorer`, a dedicated `Report` tab, and a vertical resize handle for the explorer pane.
+- `gui/static/app.js` owns tree rendering, context-menu dispatch, case drag/drop moves between projects, case/project rename/export/delete flows, and client-side report synthesis from the latest solve result.
+- `gui/routers/cases_router.py` materializes legacy root cases into the canonical `default` project during project enumeration so the browser always sees one stable hierarchy.
+- `gui/static/app.css` defines the explorer-tree interaction states, drag/drop affordances, resizable sidebar presentation, and report layout styling.
+
+**Current browser-UI additions (Phase 34):**
+
+- `gui/pages/post_graphs.py` and the FastAPI result path include `Area Profile` as a first-class plot built from `SimulationResult.gas_solution.area_values`.
+- `gui/templates/index.html` and `gui/static/app.js` render the same `x` vs `Area` figure in the Grid tab so the preview and post-run graph surfaces stay aligned.
+- A right-side chat panel is introduced as a resizable browser pane with ChatGPT-style turn layout, session-local history, text input, and browser speech-recognition input when available.
+- `gui/routers/chat_router.py` and `gui/chat_service.py` provide the server-side LLM integration boundary, assembling selected-case context and latest-result summary without exposing provider credentials to the browser.
 
 **Non-blocking design resolution (Phase 25):**
 The solver is invoked in a `threading.Thread` started by `/api/simulation/run`. For multi-value Conditions input,

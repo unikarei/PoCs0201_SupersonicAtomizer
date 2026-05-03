@@ -14,12 +14,28 @@
 let activeProjectName = null;
 let activeCaseName = null;
 let defaultProjectName = "default";
+let projectTreeData = [];
 let currentJobId   = null;
 let pollTimer      = null;
 let plotData       = {};   // field → base64 PNG
 let csvContent     = "";
 let tableRows      = [];
+let lastPlotFields = [];
+let lastRunCount = 0;
+let lastDiagnostics = null;
 const MULTI_VALUE_SPLIT_RE = /[\s,;，、]+/;
+const expandedProjects = new Set();
+let contextMenuTarget = { type: "root" };
+let draggedCaseRef = null;
+let sidebarResizeState = null;
+let rightSidebarResizeState = null;
+const caseChatHistories = new Map();
+let chatVoiceRecognition = null;
+let chatVoiceListening = false;
+const MIN_LEFT_PANEL_WIDTH = 180;
+const MAX_LEFT_PANEL_WIDTH = 520;
+const MIN_RIGHT_PANEL_WIDTH = 280;
+const MAX_RIGHT_PANEL_WIDTH = 640;
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
 async function apiFetch(url, options = {}) {
@@ -64,6 +80,15 @@ function setStatus(el, msg, cls) {
   el.className = "solve-status " + (cls || "");
 }
 
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function splitNumericTokens(rawValue) {
   if (rawValue === null || rawValue === undefined) return [];
   const text = String(rawValue).trim();
@@ -91,6 +116,93 @@ function parseSingleNumericValue(rawValue, label, { optional = false } = {}) {
   return value;
 }
 
+function formatReportValue(value) {
+  if (value === null || value === undefined || value === "") return "-";
+  if (Array.isArray(value)) return value.join(", ");
+  return String(value);
+}
+
+function clamp(value, minValue, maxValue) {
+  return Math.min(maxValue, Math.max(minValue, value));
+}
+
+function formatPlotFieldLabel(field) {
+  if (field === "area_profile") return "Area Profile";
+  return String(field).replace(/_/g, " ");
+}
+
+function setLeftPanelWidth(widthPx) {
+  const nextWidth = clamp(widthPx, MIN_LEFT_PANEL_WIDTH, MAX_LEFT_PANEL_WIDTH);
+  document.documentElement.style.setProperty("--left-panel-width", `${nextWidth}px`);
+}
+
+function setRightPanelWidth(widthPx) {
+  const nextWidth = clamp(widthPx, MIN_RIGHT_PANEL_WIDTH, MAX_RIGHT_PANEL_WIDTH);
+  document.documentElement.style.setProperty("--right-panel-width", `${nextWidth}px`);
+}
+
+function endSidebarResize() {
+  if (!sidebarResizeState) return;
+  sidebarResizeState = null;
+  document.body.classList.remove("sidebar-resizing");
+}
+
+function handleSidebarResizeMove(event) {
+  if (!sidebarResizeState) return;
+  const width = sidebarResizeState.startWidth + (event.clientX - sidebarResizeState.startX);
+  setLeftPanelWidth(width);
+}
+
+function initializeSidebarResizeHandle() {
+  const handle = document.getElementById("left-panel-resize-handle");
+  const panel = document.querySelector(".left-panel");
+  if (!handle || !panel) return;
+
+  handle.addEventListener("mousedown", event => {
+    sidebarResizeState = {
+      startX: event.clientX,
+      startWidth: panel.getBoundingClientRect().width,
+    };
+    document.body.classList.add("sidebar-resizing");
+    event.preventDefault();
+  });
+
+  document.addEventListener("mousemove", handleSidebarResizeMove);
+  document.addEventListener("mouseup", endSidebarResize);
+  document.addEventListener("mouseleave", endSidebarResize);
+}
+
+function endRightSidebarResize() {
+  if (!rightSidebarResizeState) return;
+  rightSidebarResizeState = null;
+  document.body.classList.remove("chat-sidebar-resizing");
+}
+
+function handleRightSidebarResizeMove(event) {
+  if (!rightSidebarResizeState) return;
+  const width = rightSidebarResizeState.startWidth + (rightSidebarResizeState.startX - event.clientX);
+  setRightPanelWidth(width);
+}
+
+function initializeRightSidebarResizeHandle() {
+  const handle = document.getElementById("right-panel-resize-handle");
+  const panel = document.querySelector(".chat-panel");
+  if (!handle || !panel) return;
+
+  handle.addEventListener("mousedown", event => {
+    rightSidebarResizeState = {
+      startX: event.clientX,
+      startWidth: panel.getBoundingClientRect().width,
+    };
+    document.body.classList.add("chat-sidebar-resizing");
+    event.preventDefault();
+  });
+
+  document.addEventListener("mousemove", handleRightSidebarResizeMove);
+  document.addEventListener("mouseup", endRightSidebarResize);
+  document.addEventListener("mouseleave", endRightSidebarResize);
+}
+
 // ── Tab navigation ─────────────────────────────────────────────────────────────
 document.querySelectorAll(".tab-btn").forEach(btn => {
   btn.addEventListener("click", () => {
@@ -115,105 +227,504 @@ function projectCaseUrl(projectName, caseName) {
   return `${projectCasesBaseUrl(projectName)}/${encodeURIComponent(caseName)}`;
 }
 
+function getActiveCaseRef() {
+  if (!activeCaseName) return null;
+  return `${getActiveProjectName()}/${activeCaseName}`;
+}
+
+function getCaseChatHistory() {
+  const caseRef = getActiveCaseRef();
+  if (!caseRef) return [];
+  return caseChatHistories.get(caseRef) || [];
+}
+
+function setCaseChatHistory(messages) {
+  const caseRef = getActiveCaseRef();
+  if (!caseRef) return;
+  caseChatHistories.set(caseRef, messages);
+}
+
+function setChatStatus(message, isError = false) {
+  const statusEl = document.getElementById("chat-status");
+  if (!statusEl) return;
+  statusEl.textContent = message || "";
+  statusEl.style.color = isError ? "#b91c1c" : "#64748b";
+}
+
+function renderChatHistory() {
+  const container = document.getElementById("chat-messages");
+  if (!container) return;
+  container.innerHTML = "";
+
+  if (!activeCaseName) {
+    container.innerHTML = '<div class="chat-empty">Select a case to discuss it with the assistant.</div>';
+    return;
+  }
+
+  const history = getCaseChatHistory();
+  if (history.length === 0) {
+    container.innerHTML = '<div class="chat-empty">Ask about the selected case configuration or the latest solve result.</div>';
+    return;
+  }
+
+  history.forEach(message => {
+    const row = document.createElement("div");
+    row.className = `chat-message ${message.role}`;
+    const bubble = document.createElement("div");
+    bubble.className = "chat-bubble";
+    bubble.textContent = message.content;
+    row.appendChild(bubble);
+    container.appendChild(row);
+  });
+  container.scrollTop = container.scrollHeight;
+}
+
+function updateChatPanelState() {
+  const caseLabel = document.getElementById("chat-case-label");
+  const input = document.getElementById("chat-input");
+  const sendButton = document.getElementById("btn-send-chat");
+  const voiceButton = document.getElementById("btn-chat-voice");
+  const clearButton = document.getElementById("btn-clear-chat");
+  const hasCase = Boolean(activeCaseName);
+
+  if (caseLabel) {
+    caseLabel.textContent = hasCase
+      ? `${getActiveProjectName()} / ${activeCaseName}`
+      : "No case selected";
+  }
+  if (input) input.disabled = !hasCase;
+  if (sendButton) sendButton.disabled = !hasCase;
+  if (clearButton) clearButton.disabled = !hasCase;
+  if (voiceButton) voiceButton.disabled = !hasCase || !chatVoiceRecognition;
+  renderChatHistory();
+}
+
+function normalizeChatMessagesForApi(messages) {
+  return messages
+    .filter(message => message.role === "user" || message.role === "assistant")
+    .map(message => ({ role: message.role, content: message.content }));
+}
+
+async function submitChatMessage() {
+  if (!activeCaseName) return;
+  const input = document.getElementById("chat-input");
+  if (!input) return;
+  const text = input.value.trim();
+  if (!text) return;
+
+  const history = getCaseChatHistory();
+  const userMessage = { role: "user", content: text };
+  const pendingMessage = { role: "assistant", content: "Thinking..." };
+  setCaseChatHistory([...history, userMessage, pendingMessage]);
+  renderChatHistory();
+  setChatStatus("Sending message...");
+  input.value = "";
+
+  try {
+    const response = await apiFetch("/api/chat/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        project_name: getActiveProjectName(),
+        case_name: activeCaseName,
+        messages: normalizeChatMessagesForApi([...history, userMessage]),
+      }),
+    });
+    setCaseChatHistory([...history, userMessage, response.reply]);
+    setChatStatus("");
+  } catch (error) {
+    setCaseChatHistory([...history, userMessage, { role: "system", content: error.message }]);
+    setChatStatus("Chat request failed.", true);
+  }
+  renderChatHistory();
+}
+
+function clearActiveCaseChat() {
+  const caseRef = getActiveCaseRef();
+  if (!caseRef) return;
+  caseChatHistories.delete(caseRef);
+  setChatStatus("");
+  renderChatHistory();
+}
+
+function initializeChatVoiceInput() {
+  const voiceButton = document.getElementById("btn-chat-voice");
+  const input = document.getElementById("chat-input");
+  if (!voiceButton || !input) return;
+
+  const RecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!RecognitionCtor) {
+    voiceButton.textContent = "Voice unavailable";
+    voiceButton.disabled = true;
+    return;
+  }
+
+  chatVoiceRecognition = new RecognitionCtor();
+  chatVoiceRecognition.lang = "ja-JP";
+  chatVoiceRecognition.interimResults = false;
+  chatVoiceRecognition.maxAlternatives = 1;
+
+  chatVoiceRecognition.addEventListener("result", event => {
+    const transcript = Array.from(event.results)
+      .map(result => result[0]?.transcript || "")
+      .join(" ")
+      .trim();
+    if (!transcript) return;
+    input.value = input.value ? `${input.value.trim()} ${transcript}` : transcript;
+    setChatStatus("Voice input added.");
+  });
+  chatVoiceRecognition.addEventListener("end", () => {
+    chatVoiceListening = false;
+    voiceButton.classList.remove("listening");
+    voiceButton.textContent = "Voice";
+  });
+  chatVoiceRecognition.addEventListener("error", event => {
+    chatVoiceListening = false;
+    voiceButton.classList.remove("listening");
+    voiceButton.textContent = "Voice";
+    setChatStatus(`Voice input failed: ${event.error}`, true);
+  });
+
+  voiceButton.addEventListener("click", () => {
+    if (!chatVoiceRecognition || voiceButton.disabled) return;
+    if (chatVoiceListening) {
+      chatVoiceRecognition.stop();
+      return;
+    }
+    try {
+      chatVoiceRecognition.start();
+      chatVoiceListening = true;
+      voiceButton.classList.add("listening");
+      voiceButton.textContent = "Listening...";
+      setChatStatus("Listening for voice input...");
+    } catch (error) {
+      setChatStatus(`Voice input failed: ${error.message}`, true);
+    }
+  });
+}
+
+function getCaseErrorElement() {
+  return document.getElementById("case-error");
+}
+
+function clearCaseError() {
+  const errEl = getCaseErrorElement();
+  if (errEl) hideError(errEl);
+}
+
+function showCaseErrorMessage(message) {
+  const errEl = getCaseErrorElement();
+  if (errEl) showError(errEl, message);
+}
+
+function findProjectRecord(projectName) {
+  return projectTreeData.find(project => project.name === projectName) || null;
+}
+
+function closeTreeContextMenu() {
+  const menu = document.getElementById("tree-context-menu");
+  if (!menu) return;
+  menu.classList.add("hidden");
+  menu.replaceChildren();
+}
+
+function clearTreeDropTargets() {
+  document.querySelectorAll(".tree-row.drop-target").forEach(row => row.classList.remove("drop-target"));
+}
+
+function getContextMenuActions(target) {
+  if (target.type === "case") {
+    return [
+      { id: "rename-case", label: "Rename case" },
+      { id: "duplicate-case", label: "Duplicate case" },
+      { id: "export-case", label: "Export YAML" },
+      { id: "delete-case", label: "Delete case" },
+    ];
+  }
+  if (target.type === "project") {
+    return [
+      { id: "new-case", label: "New case" },
+      { id: "rename-project", label: "Rename project" },
+      { id: "export-project", label: "Export project" },
+      { id: "delete-project", label: "Delete project" },
+      { id: "refresh-tree", label: "Refresh tree" },
+    ];
+  }
+  return [
+    { id: "new-project", label: "New project" },
+    { id: "refresh-tree", label: "Refresh tree" },
+  ];
+}
+
+function positionTreeContextMenu(menu, x, y) {
+  const padding = 8;
+  const { innerWidth, innerHeight } = window;
+  const rect = menu.getBoundingClientRect();
+  const nextLeft = Math.min(x, innerWidth - rect.width - padding);
+  const nextTop = Math.min(y, innerHeight - rect.height - padding);
+  menu.style.left = `${Math.max(padding, nextLeft)}px`;
+  menu.style.top = `${Math.max(padding, nextTop)}px`;
+}
+
+function openTreeContextMenu(x, y, target) {
+  const menu = document.getElementById("tree-context-menu");
+  if (!menu) return;
+  contextMenuTarget = target;
+  menu.replaceChildren();
+
+  getContextMenuActions(target).forEach(action => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.dataset.action = action.id;
+    button.textContent = action.label;
+    menu.appendChild(button);
+  });
+
+  menu.classList.remove("hidden");
+  positionTreeContextMenu(menu, x, y);
+}
+
+function renderProjectCaseTree() {
+  const tree = document.getElementById("project-case-tree");
+  if (!tree) return;
+  tree.replaceChildren();
+
+  if (!projectTreeData.length) {
+    const empty = document.createElement("li");
+    empty.className = "tree-empty";
+    empty.textContent = "No projects yet. Right-click here to create one.";
+    tree.appendChild(empty);
+    return;
+  }
+
+  projectTreeData.forEach(project => {
+    const projectItem = document.createElement("li");
+    projectItem.className = "tree-node";
+    projectItem.setAttribute("role", "treeitem");
+
+    const projectRow = document.createElement("div");
+    projectRow.className = "tree-row project-row";
+    projectRow.dataset.treeType = "project";
+    projectRow.dataset.projectName = project.name;
+    if (activeProjectName === project.name && !activeCaseName) {
+      projectRow.classList.add("active");
+    }
+
+    const toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "tree-toggle";
+    if (project.cases.length > 0) {
+      toggle.textContent = expandedProjects.has(project.name) ? "-" : "+";
+      toggle.setAttribute("aria-label", expandedProjects.has(project.name) ? "Collapse project" : "Expand project");
+      toggle.addEventListener("click", event => {
+        event.stopPropagation();
+        if (expandedProjects.has(project.name)) {
+          expandedProjects.delete(project.name);
+        } else {
+          expandedProjects.add(project.name);
+        }
+        renderProjectCaseTree();
+      });
+    } else {
+      toggle.disabled = true;
+      toggle.classList.add("tree-toggle-placeholder");
+      toggle.textContent = "";
+    }
+    projectRow.appendChild(toggle);
+
+    const projectBadge = document.createElement("span");
+    projectBadge.className = "tree-badge";
+    projectBadge.textContent = "PRJ";
+    projectRow.appendChild(projectBadge);
+
+    const projectLabel = document.createElement("span");
+    projectLabel.className = "tree-label";
+    projectLabel.textContent = project.name;
+    projectRow.appendChild(projectLabel);
+    projectRow.addEventListener("click", () => selectProject(project.name));
+    projectRow.addEventListener("dragover", event => {
+      if (!draggedCaseRef || draggedCaseRef.projectName === project.name) return;
+      event.preventDefault();
+      clearTreeDropTargets();
+      projectRow.classList.add("drop-target");
+    });
+    projectRow.addEventListener("dragleave", event => {
+      if (event.currentTarget !== projectRow) return;
+      projectRow.classList.remove("drop-target");
+    });
+    projectRow.addEventListener("drop", event => {
+      if (!draggedCaseRef || draggedCaseRef.projectName === project.name) return;
+      event.preventDefault();
+      projectRow.classList.remove("drop-target");
+      void moveCaseToProject(draggedCaseRef.projectName, draggedCaseRef.caseName, project.name);
+    });
+    projectRow.addEventListener("contextmenu", event => {
+      event.preventDefault();
+      selectProject(project.name, { preserveCase: true });
+      openTreeContextMenu(event.clientX, event.clientY, { type: "project", projectName: project.name });
+    });
+    projectItem.appendChild(projectRow);
+
+    if (project.cases.length > 0 && expandedProjects.has(project.name)) {
+      const childList = document.createElement("ul");
+      childList.className = "tree-children";
+      childList.setAttribute("role", "group");
+      project.cases.forEach(caseName => {
+        const caseItem = document.createElement("li");
+        caseItem.className = "tree-node";
+        caseItem.setAttribute("role", "treeitem");
+
+        const caseRow = document.createElement("div");
+        caseRow.className = "tree-row case-row";
+        caseRow.dataset.treeType = "case";
+        caseRow.dataset.projectName = project.name;
+        caseRow.dataset.caseName = caseName;
+        if (activeProjectName === project.name && activeCaseName === caseName) {
+          caseRow.classList.add("active");
+        }
+
+        const spacer = document.createElement("span");
+        spacer.className = "tree-toggle-placeholder";
+        caseRow.appendChild(spacer);
+
+        const caseBadge = document.createElement("span");
+        caseBadge.className = "tree-badge";
+        caseBadge.textContent = "CASE";
+        caseRow.appendChild(caseBadge);
+
+        const caseLabel = document.createElement("span");
+        caseLabel.className = "tree-label";
+        caseLabel.textContent = caseName;
+        caseRow.appendChild(caseLabel);
+        caseRow.draggable = true;
+
+        caseRow.addEventListener("click", () => {
+          void selectCase(project.name, caseName);
+        });
+        caseRow.addEventListener("dragstart", event => {
+          draggedCaseRef = { projectName: project.name, caseName };
+          caseRow.classList.add("dragging");
+          if (event.dataTransfer) {
+            event.dataTransfer.effectAllowed = "move";
+            event.dataTransfer.setData("text/plain", `${project.name}/${caseName}`);
+          }
+        });
+        caseRow.addEventListener("dragend", () => {
+          draggedCaseRef = null;
+          caseRow.classList.remove("dragging");
+          clearTreeDropTargets();
+        });
+        caseRow.addEventListener("contextmenu", event => {
+          event.preventDefault();
+          activeProjectName = project.name;
+          activeCaseName = caseName;
+          updateActiveCaseLabel();
+          renderProjectCaseTree();
+          openTreeContextMenu(event.clientX, event.clientY, {
+            type: "case",
+            projectName: project.name,
+            caseName,
+          });
+        });
+
+        caseItem.appendChild(caseRow);
+        childList.appendChild(caseItem);
+      });
+      projectItem.appendChild(childList);
+    }
+
+    tree.appendChild(projectItem);
+  });
+}
+
+function updateCaseActionButtons() {
+  renderProjectCaseTree();
+}
+
+function updateProjectActionButtons() {
+  renderProjectCaseTree();
+}
+
 function updateActiveCaseLabel() {
   const label = document.getElementById("active-case-label");
   if (!activeProjectName && !activeCaseName) {
     label.textContent = "No case selected";
+    updateChatPanelState();
     return;
   }
   if (!activeCaseName) {
     label.textContent = `Active project: ${getActiveProjectName()}`;
+    updateChatPanelState();
     return;
   }
   label.textContent = `Active: ${getActiveProjectName()} / ${activeCaseName}`;
+  updateChatPanelState();
 }
 
-function updateCaseActionButtons() {
-  const hasCase = Boolean(activeCaseName);
-  ["btn-rename-case", "btn-duplicate-case", "btn-delete-case", "btn-export-case"].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.disabled = !hasCase;
-  });
+function selectProject(projectName, { preserveCase = false } = {}) {
+  const shouldPreserveCase = preserveCase && activeProjectName === projectName && Boolean(activeCaseName);
+  activeProjectName = projectName;
+  if (!shouldPreserveCase) {
+    activeCaseName = null;
+  }
+  expandedProjects.add(projectName);
+  updateActiveCaseLabel();
+  renderProjectCaseTree();
 }
 
-function updateProjectActionButtons() {
-  const hasProject = Boolean(activeProjectName);
-  ["btn-rename-project", "btn-delete-project", "btn-export-project"].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.disabled = !hasProject;
-  });
-}
-
-async function loadProjectList(preferredProjectName = null) {
+async function loadProjectTree(preferredProjectName = null) {
   const data = await apiFetch("/api/cases/projects/");
-  const select = document.getElementById("project-select");
   const projects = data.projects || [];
   defaultProjectName = data.default_project || "default";
-  select.innerHTML = "";
-
-  projects.forEach(projectName => {
-    const option = document.createElement("option");
-    option.value = projectName;
-    option.textContent = projectName;
-    select.appendChild(option);
-  });
 
   if (projects.length === 0) {
+    projectTreeData = [];
     activeProjectName = null;
     activeCaseName = null;
-    document.getElementById("case-list").innerHTML = "";
     updateActiveCaseLabel();
-    updateCaseActionButtons();
-    updateProjectActionButtons();
+    renderProjectCaseTree();
     return;
   }
 
   const nextProject = preferredProjectName && projects.includes(preferredProjectName)
     ? preferredProjectName
     : (activeProjectName && projects.includes(activeProjectName) ? activeProjectName : projects[0]);
-  select.value = nextProject;
+
+  const casesByProject = await Promise.all(projects.map(async projectName => {
+    const response = await apiFetch(`${projectCasesBaseUrl(projectName)}/`);
+    return {
+      name: projectName,
+      cases: response.cases || [],
+    };
+  }));
+
+  projectTreeData = casesByProject;
   activeProjectName = nextProject;
+  expandedProjects.add(nextProject);
+
+  const activeProjectCases = findProjectRecord(nextProject)?.cases || [];
+  if (!activeCaseName || !activeProjectCases.includes(activeCaseName)) {
+    activeCaseName = null;
+  }
+
   updateActiveCaseLabel();
-  updateCaseActionButtons();
-  updateProjectActionButtons();
-  await loadCaseList(nextProject);
+  renderProjectCaseTree();
+}
+
+async function loadProjectList(preferredProjectName = null) {
+  await loadProjectTree(preferredProjectName);
 }
 
 async function loadCaseList(projectName = getActiveProjectName()) {
-  if (!projectName) {
-    document.getElementById("case-list").innerHTML = "";
-    activeCaseName = null;
-    updateActiveCaseLabel();
-    updateCaseActionButtons();
-    return;
-  }
-  const data = await apiFetch(`${projectCasesBaseUrl(projectName)}/`);
-  const ul = document.getElementById("case-list");
-  ul.innerHTML = "";
-  (data.cases || []).forEach(name => {
-    const li = document.createElement("li");
-    li.textContent = name;
-    if (name === activeCaseName && projectName === activeProjectName) li.classList.add("active");
-    li.addEventListener("click", () => selectCase(projectName, name));
-    ul.appendChild(li);
-  });
-
-  if (!(data.cases || []).includes(activeCaseName) || projectName !== activeProjectName) {
-    activeProjectName = projectName;
-    activeCaseName = null;
-    updateActiveCaseLabel();
-  }
-  updateCaseActionButtons();
+  await loadProjectTree(projectName);
 }
 
 async function selectCase(projectName, name) {
   activeProjectName = projectName;
   activeCaseName = name;
+  expandedProjects.add(projectName);
   updateActiveCaseLabel();
-  updateCaseActionButtons();
-  document.querySelectorAll(".case-list li").forEach(li => {
-    li.classList.toggle("active", li.textContent === name);
-  });
+  renderProjectCaseTree();
   // Load the case config into the forms
   try {
     const cfg = await apiFetch(projectCaseUrl(projectName, name));
@@ -226,16 +737,24 @@ async function selectCase(projectName, name) {
       tableRows = last.table_rows || [];
       csvContent = last.csv || "";
       const fields = last.plot_fields || Object.keys(plotData);
+      lastPlotFields = fields;
+      lastRunCount = last.run_count || 1;
+      lastDiagnostics = last.diagnostics || null;
       renderPlots(fields);
       renderTable(tableRows);
+      renderReport();
       document.getElementById("btn-download-csv").disabled = !csvContent;
     } catch (_e) {
       // No previous result for this case — clear any existing post-tab content
       plotData = {};
       tableRows = [];
       csvContent = "";
+      lastPlotFields = [];
+      lastRunCount = 0;
+      lastDiagnostics = null;
       renderPlots([]);
       renderTable([]);
+      renderReport();
       document.getElementById("btn-download-csv").disabled = true;
     }
   } catch (e) {
@@ -243,65 +762,59 @@ async function selectCase(projectName, name) {
   }
 }
 
-document.getElementById("project-select").addEventListener("change", async (ev) => {
-  activeProjectName = ev.target.value || null;
-  activeCaseName = null;
-  updateActiveCaseLabel();
-  updateProjectActionButtons();
-  await loadCaseList(activeProjectName);
-});
+async function createProject(projectName) {
+  clearCaseError();
+  await apiFetch("/api/cases/projects/", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name: projectName }),
+  });
+  await loadProjectTree(projectName);
+}
 
-document.getElementById("btn-new-project").addEventListener("click", async () => {
-  const nameInput = document.getElementById("new-project-name");
-  const name = nameInput.value.trim();
-  const errEl = document.getElementById("case-error");
-  if (!name) { showError(errEl, "Enter a project name."); return; }
-  hideError(errEl);
+async function createProjectInteractive() {
+  const projectName = window.prompt("New project name", "");
+  if (!projectName || !projectName.trim()) return;
   try {
-    await apiFetch("/api/cases/projects/", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name }),
-    });
-    nameInput.value = "";
-    await loadProjectList(name);
+    await createProject(projectName.trim());
   } catch (e) {
-    showError(errEl, e.message);
+    showCaseErrorMessage(e.message);
   }
-});
+}
 
-document.getElementById("btn-new-case").addEventListener("click", async () => {
-  const nameInput = document.getElementById("new-case-name");
-  const name = nameInput.value.trim();
-  const errEl = document.getElementById("case-error");
-  if (!name) { showError(errEl, "Enter a case name."); return; }
-  if (!getActiveProjectName()) { showError(errEl, "Create or select a project first."); return; }
-  hideError(errEl);
+async function createCase(projectName, caseName) {
+  clearCaseError();
+  await apiFetch(`${projectCasesBaseUrl(projectName)}/`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name: caseName }),
+  });
+  await loadProjectTree(projectName);
+  await selectCase(projectName, caseName);
+}
+
+async function createCaseInteractive(projectName) {
+  if (!projectName) {
+    showCaseErrorMessage("Create or select a project first.");
+    return;
+  }
+  const caseName = window.prompt("New case name", "");
+  if (!caseName || !caseName.trim()) return;
   try {
-    await apiFetch(`${projectCasesBaseUrl(getActiveProjectName())}/`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name }),
-    });
-    nameInput.value = "";
-    await loadCaseList(getActiveProjectName());
-    await selectCase(getActiveProjectName(), name);
+    await createCase(projectName, caseName.trim());
   } catch (e) {
-    showError(errEl, e.message);
+    showCaseErrorMessage(e.message);
   }
-});
+}
 
-document.getElementById("btn-refresh-cases").addEventListener("click", async () => {
-  await loadProjectList(activeProjectName);
-});
-
-document.getElementById("btn-rename-project").addEventListener("click", async () => {
-  const projectName = getActiveProjectName();
-  if (!projectName) { alert("Select a project first."); return; }
+async function renameProjectInteractive(projectName) {
+  if (!projectName) {
+    showCaseErrorMessage("Select a project first.");
+    return;
+  }
   const newName = window.prompt("New project name", projectName);
   if (!newName || !newName.trim() || newName.trim() === projectName) return;
-  const errEl = document.getElementById("case-error");
-  hideError(errEl);
+  clearCaseError();
   try {
     const result = await apiFetch(`/api/cases/projects/${encodeURIComponent(projectName)}/rename`, {
       method: "POST",
@@ -309,130 +822,234 @@ document.getElementById("btn-rename-project").addEventListener("click", async ()
       body: JSON.stringify({ new_name: newName.trim() }),
     });
     activeProjectName = result.name || newName.trim();
-    updateActiveCaseLabel();
-    await loadProjectList(activeProjectName);
+    expandedProjects.add(activeProjectName);
+    await loadProjectTree(activeProjectName);
     if (activeCaseName) {
       await selectCase(activeProjectName, activeCaseName);
     }
   } catch (e) {
-    showError(errEl, e.message);
+    showCaseErrorMessage(e.message);
   }
-});
+}
 
-document.getElementById("btn-delete-project").addEventListener("click", async () => {
-  const projectName = getActiveProjectName();
-  if (!projectName) { alert("Select a project first."); return; }
+async function deleteProjectInteractive(projectName) {
+  if (!projectName) {
+    showCaseErrorMessage("Select a project first.");
+    return;
+  }
   if (!window.confirm(`Delete project ${projectName} and all contained cases?`)) return;
-  const errEl = document.getElementById("case-error");
-  hideError(errEl);
+  clearCaseError();
   try {
     await apiFetch(`/api/cases/projects/${encodeURIComponent(projectName)}`, { method: "DELETE" });
-    activeProjectName = null;
-    activeCaseName = null;
+    expandedProjects.delete(projectName);
+    if (activeProjectName === projectName) {
+      activeProjectName = null;
+      activeCaseName = null;
+    }
     updateActiveCaseLabel();
-    updateCaseActionButtons();
-    updateProjectActionButtons();
-    await loadProjectList();
+    await loadProjectTree();
   } catch (e) {
-    showError(errEl, e.message);
+    showCaseErrorMessage(e.message);
   }
-});
+}
 
-document.getElementById("btn-export-project").addEventListener("click", async () => {
-  const projectName = getActiveProjectName();
-  if (!projectName) { alert("Select a project first."); return; }
-  const errEl = document.getElementById("case-error");
-  hideError(errEl);
+async function exportProjectInteractive(projectName) {
+  if (!projectName) {
+    showCaseErrorMessage("Select a project first.");
+    return;
+  }
+  clearCaseError();
   try {
     const archiveBlob = await apiFetchBlob(`/api/cases/projects/${encodeURIComponent(projectName)}/export`);
     const url = URL.createObjectURL(archiveBlob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${projectName}.zip`;
-    a.click();
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `${projectName}.zip`;
+    anchor.click();
     URL.revokeObjectURL(url);
   } catch (e) {
-    showError(errEl, e.message);
+    showCaseErrorMessage(e.message);
   }
-});
+}
 
-document.getElementById("btn-duplicate-case").addEventListener("click", async () => {
-  if (!activeCaseName) { alert("Select a case first."); return; }
-  const newName = window.prompt("New case name", `${activeCaseName}_copy`);
-  if (!newName || !newName.trim()) return;
-  const errEl = document.getElementById("case-error");
-  hideError(errEl);
-  try {
-    const result = await apiFetch(`${projectCaseUrl(getActiveProjectName(), activeCaseName)}/duplicate`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ new_name: newName.trim() }),
-    });
-    await loadCaseList(getActiveProjectName());
-    await selectCase(result.project || getActiveProjectName(), result.name || newName.trim());
-  } catch (e) {
-    showError(errEl, e.message);
+async function renameCaseInteractive(projectName, caseName) {
+  if (!projectName || !caseName) {
+    showCaseErrorMessage("Select a case first.");
+    return;
   }
-});
-
-document.getElementById("btn-rename-case").addEventListener("click", async () => {
-  if (!activeCaseName) { alert("Select a case first."); return; }
-  const oldCaseName = activeCaseName;
-  const projectName = getActiveProjectName();
-  const newName = window.prompt("New case name", oldCaseName);
-  if (!newName || !newName.trim() || newName.trim() === oldCaseName) return;
-  const errEl = document.getElementById("case-error");
-  hideError(errEl);
+  const newName = window.prompt("New case name", caseName);
+  if (!newName || !newName.trim() || newName.trim() === caseName) return;
+  clearCaseError();
   try {
-    const result = await apiFetch(`${projectCaseUrl(projectName, oldCaseName)}/rename`, {
+    const result = await apiFetch(`${projectCaseUrl(projectName, caseName)}/rename`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ new_name: newName.trim() }),
     });
     activeCaseName = null;
-    await loadCaseList(result.project || projectName);
+    await loadProjectTree(result.project || projectName);
     await selectCase(result.project || projectName, result.name || newName.trim());
   } catch (e) {
-    showError(errEl, e.message);
+    showCaseErrorMessage(e.message);
   }
-});
+}
 
-document.getElementById("btn-delete-case").addEventListener("click", async () => {
-  if (!activeCaseName) { alert("Select a case first."); return; }
-  const caseName = activeCaseName;
-  const projectName = getActiveProjectName();
+async function duplicateCaseInteractive(projectName, caseName) {
+  if (!projectName || !caseName) {
+    showCaseErrorMessage("Select a case first.");
+    return;
+  }
+  const newName = window.prompt("New case name", `${caseName}_copy`);
+  if (!newName || !newName.trim()) return;
+  clearCaseError();
+  try {
+    const result = await apiFetch(`${projectCaseUrl(projectName, caseName)}/duplicate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ new_name: newName.trim() }),
+    });
+    await loadProjectTree(result.project || projectName);
+    await selectCase(result.project || projectName, result.name || newName.trim());
+  } catch (e) {
+    showCaseErrorMessage(e.message);
+  }
+}
+
+async function deleteCaseInteractive(projectName, caseName) {
+  if (!projectName || !caseName) {
+    showCaseErrorMessage("Select a case first.");
+    return;
+  }
   if (!window.confirm(`Delete case ${projectName} / ${caseName}?`)) return;
-  const errEl = document.getElementById("case-error");
-  hideError(errEl);
+  clearCaseError();
   try {
     await apiFetch(projectCaseUrl(projectName, caseName), { method: "DELETE" });
-    activeCaseName = null;
+    if (activeProjectName === projectName && activeCaseName === caseName) {
+      activeCaseName = null;
+    }
     updateActiveCaseLabel();
-    updateCaseActionButtons();
-    await loadCaseList(projectName);
+    await loadProjectTree(projectName);
   } catch (e) {
-    showError(errEl, e.message);
+    showCaseErrorMessage(e.message);
   }
-});
+}
 
-document.getElementById("btn-export-case").addEventListener("click", async () => {
-  if (!activeCaseName) { alert("Select a case first."); return; }
-  const errEl = document.getElementById("case-error");
-  hideError(errEl);
+async function exportCaseInteractive(projectName, caseName) {
+  if (!projectName || !caseName) {
+    showCaseErrorMessage("Select a case first.");
+    return;
+  }
+  clearCaseError();
   try {
-    const projectName = getActiveProjectName();
-    const yamlText = await apiFetchText(`${projectCaseUrl(projectName, activeCaseName)}/export`);
+    const yamlText = await apiFetchText(`${projectCaseUrl(projectName, caseName)}/export`);
     const blob = new Blob([yamlText], { type: "application/x-yaml" });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${projectName}_${activeCaseName}.yaml`;
-    a.click();
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `${projectName}_${caseName}.yaml`;
+    anchor.click();
     URL.revokeObjectURL(url);
   } catch (e) {
-    showError(errEl, e.message);
+    showCaseErrorMessage(e.message);
   }
+}
+
+async function moveCaseToProject(sourceProjectName, caseName, targetProjectName) {
+  if (!sourceProjectName || !caseName || !targetProjectName || sourceProjectName === targetProjectName) {
+    return;
+  }
+  clearCaseError();
+  try {
+    const result = await apiFetch(`${projectCaseUrl(sourceProjectName, caseName)}/rename`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ new_name: caseName, target_project: targetProjectName }),
+    });
+    expandedProjects.add(targetProjectName);
+    await loadProjectTree(targetProjectName);
+    if (activeProjectName === sourceProjectName && activeCaseName === caseName) {
+      await selectCase(result.project || targetProjectName, result.name || caseName);
+    }
+  } catch (e) {
+    showCaseErrorMessage(e.message);
+  } finally {
+    draggedCaseRef = null;
+    clearTreeDropTargets();
+  }
+}
+
+async function executeTreeContextAction(actionId) {
+  const target = contextMenuTarget;
+  closeTreeContextMenu();
+  if (actionId === "new-project") {
+    await createProjectInteractive();
+    return;
+  }
+  if (actionId === "refresh-tree") {
+    await loadProjectTree(activeProjectName);
+    return;
+  }
+  if (actionId === "new-case") {
+    await createCaseInteractive(target.projectName || getActiveProjectName());
+    return;
+  }
+  if (actionId === "rename-project") {
+    await renameProjectInteractive(target.projectName || getActiveProjectName());
+    return;
+  }
+  if (actionId === "delete-project") {
+    await deleteProjectInteractive(target.projectName || getActiveProjectName());
+    return;
+  }
+  if (actionId === "export-project") {
+    await exportProjectInteractive(target.projectName || getActiveProjectName());
+    return;
+  }
+  if (actionId === "rename-case") {
+    await renameCaseInteractive(target.projectName || getActiveProjectName(), target.caseName || activeCaseName);
+    return;
+  }
+  if (actionId === "duplicate-case") {
+    await duplicateCaseInteractive(target.projectName || getActiveProjectName(), target.caseName || activeCaseName);
+    return;
+  }
+  if (actionId === "delete-case") {
+    await deleteCaseInteractive(target.projectName || getActiveProjectName(), target.caseName || activeCaseName);
+    return;
+  }
+  if (actionId === "export-case") {
+    await exportCaseInteractive(target.projectName || getActiveProjectName(), target.caseName || activeCaseName);
+  }
+}
+
+const treeShell = document.getElementById("project-tree-shell");
+if (treeShell) {
+  treeShell.addEventListener("contextmenu", event => {
+    if (event.target.closest(".tree-row")) return;
+    event.preventDefault();
+    openTreeContextMenu(event.clientX, event.clientY, { type: "root" });
+  });
+}
+
+const treeContextMenu = document.getElementById("tree-context-menu");
+if (treeContextMenu) {
+  treeContextMenu.addEventListener("click", event => {
+    const button = event.target.closest("button[data-action]");
+    if (!button) return;
+    void executeTreeContextAction(button.dataset.action);
+  });
+}
+
+document.addEventListener("click", event => {
+  if (event.target.closest("#tree-context-menu")) return;
+  closeTreeContextMenu();
 });
+
+document.addEventListener("keydown", event => {
+  if (event.key === "Escape") closeTreeContextMenu();
+});
+
+window.addEventListener("resize", closeTreeContextMenu);
 
 // ── Conditions form ─────────────────────────────────────────────────────────
 
@@ -1218,13 +1835,24 @@ function drawAreaPreview(xs, As) {
   ctx.clearRect(0, 0, W, H);
   if (xs.length < 2) return;
 
-  const pad = 30;
+  const padLeft = 54;
+  const padRight = 18;
+  const padTop = 28;
+  const padBottom = 42;
   const xMin = Math.min(...xs), xMax = Math.max(...xs);
   const AMin = Math.min(...As), AMax = Math.max(...As);
   const xRange = xMax - xMin || 1, ARange = AMax - AMin || 1;
 
-  const toCanvasX = x => pad + (x - xMin) / xRange * (W - 2 * pad);
-  const toCanvasY = A => (H - pad) - (A - AMin) / ARange * (H - 2 * pad);
+  const toCanvasX = x => padLeft + (x - xMin) / xRange * (W - padLeft - padRight);
+  const toCanvasY = A => (H - padBottom) - (A - AMin) / ARange * (H - padTop - padBottom);
+
+  ctx.strokeStyle = "#d9e2ec";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(padLeft, padTop);
+  ctx.lineTo(padLeft, H - padBottom);
+  ctx.lineTo(W - padRight, H - padBottom);
+  ctx.stroke();
 
   ctx.beginPath();
   ctx.strokeStyle = "#3a78b5";
@@ -1233,14 +1861,27 @@ function drawAreaPreview(xs, As) {
   for (let i = 1; i < xs.length; i++) ctx.lineTo(toCanvasX(xs[i]), toCanvasY(As[i]));
   ctx.stroke();
 
-  // Axes labels
+  ctx.fillStyle = "#334155";
+  ctx.font = "600 12px system-ui";
+  ctx.textAlign = "center";
+  ctx.fillText("x vs Area", W / 2, 16);
+
   ctx.fillStyle = "#666";
   ctx.font = "11px system-ui";
   ctx.textAlign = "center";
-  ctx.fillText(`x = ${xMin.toExponential(2)}`, toCanvasX(xMin), H - 4);
-  ctx.fillText(`x = ${xMax.toExponential(2)}`, toCanvasX(xMax), H - 4);
+  ctx.fillText(`x min ${xMin.toExponential(2)}`, toCanvasX(xMin), H - 18);
+  ctx.fillText(`x max ${xMax.toExponential(2)}`, toCanvasX(xMax), H - 18);
+  ctx.fillText("x [m]", W / 2, H - 6);
   ctx.textAlign = "right";
-  ctx.fillText(`A = ${AMax.toExponential(2)}`, pad - 2, toCanvasY(AMax) + 4);
+  ctx.fillText(`A max ${AMax.toExponential(2)}`, padLeft - 4, toCanvasY(AMax) + 4);
+  ctx.fillText(`A min ${AMin.toExponential(2)}`, padLeft - 4, toCanvasY(AMin) + 4);
+
+  ctx.save();
+  ctx.translate(14, H / 2);
+  ctx.rotate(-Math.PI / 2);
+  ctx.textAlign = "center";
+  ctx.fillText("Area [m²]", 0, 0);
+  ctx.restore();
 }
 
 function readGridForm() {
@@ -1359,6 +2000,9 @@ async function onRunCompleted(jobId) {
     tableRows  = data.table_rows || [];
     csvContent = data.csv || "";
     const fields = data.plot_fields || Object.keys(plotData);
+    lastPlotFields = fields;
+    lastRunCount = data.run_count || 1;
+    lastDiagnostics = data.diagnostics || null;
     const runCount = data.run_count || 1;
     const statusMessage = runCount > 1
       ? `✓ Simulation sweep completed successfully (${runCount} runs).`
@@ -1366,6 +2010,7 @@ async function onRunCompleted(jobId) {
     setStatus(solveStatus, statusMessage, "success");
     renderPlots(fields);
     renderTable(tableRows);
+    renderReport();
     document.getElementById("btn-download-csv").disabled = false;
     // Extract primary-breakup metrics from diagnostics messages if present
     try {
@@ -1462,7 +2107,7 @@ function renderPlots(fields) {
     cb.dataset.field = field;
     cb.addEventListener("change", refreshVisiblePlots);
     label.appendChild(cb);
-    label.appendChild(document.createTextNode(" " + field.replace(/_/g, " ")));
+    label.appendChild(document.createTextNode(" " + formatPlotFieldLabel(field)));
     cbContainer.appendChild(label);
   });
   refreshVisiblePlots();
@@ -1478,9 +2123,13 @@ function refreshVisiblePlots() {
     if (!b64) return;
     const card = document.createElement("div");
     card.className = "plot-card";
+    const title = document.createElement("div");
+    title.className = "plot-card-title";
+    title.textContent = formatPlotFieldLabel(field);
     const img = document.createElement("img");
     img.src = "data:image/png;base64," + b64;
     img.alt = field;
+    card.appendChild(title);
     card.appendChild(img);
     container.appendChild(card);
   });
@@ -1515,6 +2164,120 @@ function renderTable(rows) {
   });
 }
 
+function collectSummaryConditions() {
+  const conditionsForm = document.getElementById("conditions-form");
+  if (!conditionsForm) return [];
+  return [
+    `Project / Case: ${formatReportValue(activeProjectName || defaultProjectName)} / ${formatReportValue(activeCaseName)}`,
+    `Working fluid: ${formatReportValue(conditionsForm.elements.working_fluid?.value)}`,
+    `Inlet total pressure P0 [Pa]: ${formatReportValue(conditionsForm.elements.Pt_in?.value)}`,
+    `Inlet total temperature T0 [K]: ${formatReportValue(conditionsForm.elements.Tt_in?.value)}`,
+    `Outlet static pressure P2 [Pa]: ${formatReportValue(conditionsForm.elements.Ps_out?.value)}`,
+    `Injection mode: ${formatReportValue(conditionsForm.elements.injection_mode?.value)}`,
+    `Breakup model: ${formatReportValue(conditionsForm.elements.breakup_model?.value)}`,
+    `Coupling mode: ${formatReportValue(conditionsForm.elements.coupling_mode?.value)}`,
+  ];
+}
+
+function collectGridSummary() {
+  const gridForm = document.getElementById("grid-form");
+  const areaRows = Array.from(document.querySelectorAll("#area-table-body tr")).length;
+  if (!gridForm) return [];
+  return [
+    `x start [m]: ${formatReportValue(gridForm.elements.x_start?.value)}`,
+    `x end [m]: ${formatReportValue(gridForm.elements.x_end?.value)}`,
+    `Number of cells: ${formatReportValue(gridForm.elements.n_cells?.value)}`,
+    `Area table points: ${areaRows}`,
+  ];
+}
+
+function buildReportList(items) {
+  return `<ul class="report-list">${items.map(item => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`;
+}
+
+function buildReportTable(rows) {
+  if (!rows || rows.length === 0) {
+    return '<div class="report-empty">No table rows are available for the latest result.</div>';
+  }
+  const headers = Object.keys(rows[0]);
+  const previewRows = rows.slice(0, 12);
+  const headHtml = headers.map(header => `<th>${escapeHtml(header)}</th>`).join("");
+  const bodyHtml = previewRows.map(row => {
+    const cells = headers.map(header => `<td>${escapeHtml(typeof row[header] === "number" ? row[header].toPrecision(5) : String(row[header]))}</td>`).join("");
+    return `<tr>${cells}</tr>`;
+  }).join("");
+  const note = rows.length > previewRows.length
+    ? `<div class="report-note">Showing first ${previewRows.length} of ${rows.length} rows. See the Table tab for the full dataset.</div>`
+    : `<div class="report-note">${rows.length} rows included from the latest result.</div>`;
+  return `<div class="report-table-wrapper"><table class="report-table"><thead><tr>${headHtml}</tr></thead><tbody>${bodyHtml}</tbody></table></div>${note}`;
+}
+
+function buildReportGraphs(fields) {
+  const availableFields = (fields || []).filter(field => plotData[field]);
+  if (availableFields.length === 0) {
+    return '<div class="report-empty">No graphs are available for the latest result.</div>';
+  }
+  return `<div class="report-graph-grid">${availableFields
+    .map(field => `<article class="report-graph-card"><h5>${escapeHtml(formatPlotFieldLabel(field))}</h5><img src="data:image/png;base64,${plotData[field]}" alt="${escapeHtml(field)}" /></article>`)
+    .join("")}</div>`;
+}
+
+function collectDiscussionPoints() {
+  const diagnosticsMessages = Array.isArray(lastDiagnostics?.messages) ? lastDiagnostics.messages : [];
+  const points = [
+    `Completed runs in latest solve: ${lastRunCount || 0}.`,
+    `Graphs generated: ${lastPlotFields.length}.`,
+    `Tabulated result rows available: ${tableRows.length}.`,
+  ];
+  if (diagnosticsMessages.length > 0) {
+    points.push(`Diagnostics messages reported: ${diagnosticsMessages.length}. Review solver diagnostics alongside graph and table trends.`);
+  } else {
+    points.push("No additional diagnostics messages were returned with the latest result payload.");
+  }
+  return points;
+}
+
+function collectConclusionPoints() {
+  return [
+    `The latest solve has been summarized into this report for ${formatReportValue(activeCaseName)}.`,
+    "Use Graph and Table sections for quantitative inspection, then refine the case settings if further iteration is required.",
+  ];
+}
+
+function renderReport() {
+  const container = document.getElementById("report-content");
+  if (!container) return;
+  if (!activeCaseName || tableRows.length === 0) {
+    container.innerHTML = '<div class="report-empty">Run Solve to generate a report.</div>';
+    return;
+  }
+
+  const sections = [
+    { title: "1. Summary Conditions", body: buildReportList(collectSummaryConditions()) },
+    { title: "2. Grid", body: buildReportList(collectGridSummary()) },
+    {
+      title: "3. Graph",
+      body: `${buildReportList([
+        `Graph fields generated: ${lastPlotFields.length}`,
+        `Latest solve run count: ${lastRunCount || 1}`,
+      ])}${buildReportGraphs(lastPlotFields)}`,
+    },
+    {
+      title: "4. Table",
+      body: `${buildReportList([
+        `Table row count: ${tableRows.length}`,
+        `CSV export ready: ${csvContent ? "yes" : "no"}`,
+      ])}${buildReportTable(tableRows)}`,
+    },
+    { title: "5. Discussion", body: buildReportList(collectDiscussionPoints()) },
+    { title: "6. Conclusion", body: buildReportList(collectConclusionPoints()) },
+  ];
+
+  container.innerHTML = sections
+    .map(section => `<section class="report-section"><h4>${escapeHtml(section.title)}</h4>${section.body}</section>`)
+    .join("");
+}
+
 document.getElementById("btn-download-csv").addEventListener("click", () => {
   if (!csvContent) return;
   const blob = new Blob([csvContent], { type: "text/csv" });
@@ -1525,6 +2288,22 @@ document.getElementById("btn-download-csv").addEventListener("click", () => {
   a.download = `${projectPrefix}${activeCaseName || "result"}.csv`;
   a.click();
   URL.revokeObjectURL(url);
+});
+
+document.getElementById("chat-form").addEventListener("submit", async event => {
+  event.preventDefault();
+  await submitChatMessage();
+});
+
+document.getElementById("btn-clear-chat").addEventListener("click", () => {
+  clearActiveCaseChat();
+});
+
+document.getElementById("chat-input").addEventListener("keydown", async event => {
+  if (event.key === "Enter" && !event.shiftKey) {
+    event.preventDefault();
+    await submitChatMessage();
+  }
 });
 
 // ── Settings tab: unit preferences ────────────────────────────────────────
@@ -1579,6 +2358,10 @@ document.getElementById("btn-save-units").addEventListener("click", async () => 
 
 // ── Initialisation ─────────────────────────────────────────────────────────
 (async function init() {
+  initializeSidebarResizeHandle();
+  initializeRightSidebarResizeHandle();
+  initializeChatVoiceInput();
   await loadProjectList();
   await loadUnitGroups();
+  updateChatPanelState();
 })();
