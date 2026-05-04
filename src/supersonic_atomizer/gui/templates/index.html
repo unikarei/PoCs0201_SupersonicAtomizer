@@ -430,7 +430,10 @@
         <h2>Case Chat</h2>
         <p id="chat-case-label" class="chat-case-label">No case selected</p>
       </div>
-      <button id="btn-clear-chat" type="button" class="chat-clear-btn">Clear</button>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button id="btn-clear-chat" type="button" class="chat-clear-btn">Clear</button>
+        <button id="btn-chat-llm-settings" type="button" class="icon-btn" title="LLM settings">⚙</button>
+      </div>
     </div>
     <div id="chat-messages" class="chat-messages">
       <div class="chat-empty">Select a case to discuss it with the assistant.</div>
@@ -542,6 +545,35 @@
       <div class="form-actions">
         <button type="button" id="graph-settings-apply-all">💾 Apply all</button>
         <span id="graph-units-status" class="status-msg"></span>
+      </div>
+    </div>
+  </div>
+</dialog>
+
+<!-- ── Chat LLM Settings Dialog ───────────────────────────────────────── -->
+<dialog id="chat-llm-dialog" class="help-dialog" aria-labelledby="chat-llm-title">
+  <div class="help-dialog-box">
+    <div class="modal-header">
+      <h3 id="chat-llm-title">Chat LLM Settings</h3>
+      <button type="button" id="chat-llm-close" class="modal-close-btn" aria-label="Close">✕</button>
+    </div>
+    <div class="modal-body">
+      <p>Select the model/provider to use for Case Chat. Leave as <strong>(default)</strong> to use the server default.</p>
+      <label style="display:flex;align-items:center;gap:8px;margin-top:8px">
+        <span style="min-width:48px">LLM</span>
+        <select id="chat-llm-sel" aria-label="Select LLM" title="Select LLM provider/model">
+          <option value="">(default)</option>
+          <option value="gpt-4.1-mini">gpt-4.1-mini</option>
+          <option value="gpt-4o-mini">gpt-4o-mini</option>
+          <option value="gpt-4o">gpt-4o</option>
+          <option value="gpt-4.1">gpt-4.1</option>
+          <option value="gpt-3.5-turbo">gpt-3.5-turbo</option>
+        </select>
+      </label>
+      <div class="form-actions" style="margin-top:12px">
+        <button type="button" id="chat-llm-save">💾 Save</button>
+        <button type="button" id="chat-llm-cancel">Cancel</button>
+        <span id="chat-llm-status" class="status-msg"></span>
       </div>
     </div>
   </div>

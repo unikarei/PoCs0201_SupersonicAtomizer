@@ -28,16 +28,18 @@ class ProviderConfig:
 class ChatService:
     """Assemble case-aware prompts and call an OpenAI-compatible chat endpoint."""
 
-    def _provider_config(self) -> ProviderConfig:
+    def _provider_config(self, model_override: str | None = None) -> ProviderConfig:
         api_key = os.environ.get("OPENAI_API_KEY", "").strip()
         if not api_key:
             raise ChatConfigurationError(
                 "LLM backend is not configured. Set OPENAI_API_KEY on the server to enable case chat."
             )
+        model = model_override if model_override else os.environ.get("OPENAI_MODEL", "gpt-4.1-mini").strip() or "gpt-4.1-mini"
+        base_url = (os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1").strip() or "https://api.openai.com/v1").rstrip("/")
         return ProviderConfig(
             api_key=api_key,
-            model=os.environ.get("OPENAI_MODEL", "gpt-4.1-mini").strip() or "gpt-4.1-mini",
-            base_url=(os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1").strip() or "https://api.openai.com/v1").rstrip("/"),
+            model=model,
+            base_url=base_url,
             timeout_seconds=float(os.environ.get("OPENAI_TIMEOUT_SECONDS", "45")),
         )
 
@@ -48,10 +50,11 @@ class ChatService:
         case_name: str,
         case_config: dict[str, Any],
         messages: list[dict[str, str]],
+        model_override: str | None = None,
     ) -> str:
         if not messages:
             raise ValueError("At least one user message is required.")
-        provider = self._provider_config()
+        provider = self._provider_config(model_override=model_override)
         prompt_messages = self._build_prompt_messages(
             project_name=project_name,
             case_name=case_name,

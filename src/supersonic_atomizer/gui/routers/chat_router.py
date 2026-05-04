@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 
 from supersonic_atomizer.gui.case_store import CaseNameError, CaseNotFoundError, CaseStore
 from supersonic_atomizer.gui.chat_service import ChatConfigurationError, ChatService
@@ -17,7 +17,7 @@ def _get_store() -> CaseStore:
 
 
 @router.post("/messages", response_model=ChatReplyResponse)
-async def send_chat_message(body: ChatRequest) -> ChatReplyResponse:
+async def send_chat_message(request: Request, body: ChatRequest) -> ChatReplyResponse:
     """Return a case-aware assistant reply for the selected case."""
     store = _get_store()
     try:
@@ -29,12 +29,20 @@ async def send_chat_message(body: ChatRequest) -> ChatReplyResponse:
     except CaseNameError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    # Allow optional per-request model override via X-LLM-MODEL header
+    model_override = None
+    try:
+        model_override = request.headers.get("X-LLM-MODEL")
+    except Exception:
+        model_override = None
+
     try:
         reply_text = _chat_service.generate_reply(
             project_name=body.project_name,
             case_name=body.case_name,
             case_config=case_config,
             messages=[{"role": message.role, "content": message.content} for message in body.messages],
+            model_override=model_override,
         )
     except ChatConfigurationError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc

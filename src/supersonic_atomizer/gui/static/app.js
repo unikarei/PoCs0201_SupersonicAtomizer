@@ -432,9 +432,12 @@ async function submitChatMessage() {
   input.value = "";
 
   try {
+    const headers = { "Content-Type": "application/json" };
+    const llmSel = document.getElementById("chat-llm-sel");
+    if (llmSel && llmSel.value) headers["X-LLM-MODEL"] = llmSel.value;
     const response = await apiFetch("/api/chat/messages", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify({
         project_name: getActiveProjectName(),
         case_name: activeCaseName,
@@ -510,6 +513,58 @@ function initializeChatVoiceInput() {
       setChatStatus("Listening for voice input...");
     } catch (error) {
       setChatStatus(`Voice input failed: ${error.message}`, true);
+    }
+  });
+}
+
+// Chat LLM selector persistence and helper
+function loadChatLlmSelection() {
+  const sel = document.getElementById("chat-llm-sel");
+  if (!sel) return;
+  const saved = localStorage.getItem("chat_llm_model") || "";
+  sel.value = saved;
+  sel.addEventListener("change", () => {
+    try { localStorage.setItem("chat_llm_model", sel.value || ""); } catch (_e) {}
+  });
+}
+
+// Initialize the chat LLM settings dialog and its controls (open/close/save)
+function initializeChatLlmDialog() {
+  const btn = document.getElementById("btn-chat-llm-settings");
+  const dlg = document.getElementById("chat-llm-dialog");
+  const closeBtn = document.getElementById("chat-llm-close");
+  const saveBtn = document.getElementById("chat-llm-save");
+  const cancelBtn = document.getElementById("chat-llm-cancel");
+  const sel = document.getElementById("chat-llm-sel");
+  if (!btn || !dlg) return;
+
+  btn.addEventListener("click", () => {
+    try {
+      if (sel) sel.value = localStorage.getItem("chat_llm_model") || "";
+      dlg.showModal();
+    } catch (e) {
+      // Fallback for browsers without <dialog>
+      dlg.classList.remove("hidden");
+    }
+  });
+
+  const closeDialog = () => {
+    try { dlg.close(); } catch (_) { dlg.classList.add("hidden"); }
+  };
+
+  if (closeBtn) closeBtn.addEventListener("click", closeDialog);
+  if (cancelBtn) cancelBtn.addEventListener("click", closeDialog);
+
+  if (saveBtn) saveBtn.addEventListener("click", () => {
+    const statusEl = document.getElementById("chat-llm-status");
+    try {
+      if (sel) localStorage.setItem("chat_llm_model", sel.value || "");
+      if (statusEl) { statusEl.textContent = "✓ Saved"; }
+      showToast("LLM selection saved");
+      setTimeout(() => { if (statusEl) statusEl.textContent = ""; }, 1500);
+      closeDialog();
+    } catch (e) {
+      if (statusEl) statusEl.textContent = "Error: " + e.message;
     }
   });
 }
@@ -2675,6 +2730,10 @@ async function init() {
   await loadProjectList();
   console.log("About to loadUnitGroups...");
   await loadUnitGroups();
+  console.log("About to loadChatLlmSelection...");
+  loadChatLlmSelection();
+  console.log("About to initializeChatLlmDialog...");
+  initializeChatLlmDialog();
   console.log("About to updateChatPanelState...");
   updateChatPanelState();
   console.log("init() complete!");
