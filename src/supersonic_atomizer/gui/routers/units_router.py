@@ -42,10 +42,15 @@ async def patch_unit_preferences(
 
 @router.get("/groups")
 async def get_unit_groups() -> dict[str, Any]:
-    """Return all unit groups and their available options."""
-    # UNIT_GROUPS is dict[str, dict[str, UnitSpec]]; keys of the inner dict
-    # are the available unit labels.
+    """Return all unit groups with conversion specs for each option.
+
+    Returns a nested dict: ``{group: {label: {scale, offset}}}``.
+    ``scale`` and ``offset`` satisfy: ``display = si * scale + offset``.
+    """
     return {
-        group: list(options.keys())
+        group: {
+            label: {"scale": spec.scale, "offset": spec.offset}
+            for label, spec in options.items()
+        }
         for group, options in UNIT_GROUPS.items()
     }

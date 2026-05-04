@@ -599,10 +599,18 @@ class TestUnitsEndpoints:
         resp = client.get("/api/units/groups")
         assert resp.status_code == 200
         data = resp.json()
-        # Must contain at least pressure group
+        # Must contain at least pressure group with spec format {label: {scale, offset}}
         assert "pressure" in data
-        assert isinstance(data["pressure"], list)
+        assert isinstance(data["pressure"], dict)
         assert len(data["pressure"]) >= 1
+        # Check that pressure group has at least "Pa" as a unit
+        assert "Pa" in data["pressure"]
+        # Check the spec has scale and offset
+        pa_spec = data["pressure"]["Pa"]
+        assert isinstance(pa_spec, dict)
+        assert "scale" in pa_spec
+        assert "offset" in pa_spec
+        assert pa_spec["scale"] == 1.0
 
     def test_get_unit_preferences_returns_dict(self, client):
         resp = client.get("/api/units/preferences")

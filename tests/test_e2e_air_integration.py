@@ -108,7 +108,8 @@ class TestEndToEndAirIntegration(unittest.TestCase):
             self.assertIn("x,", csv_content)
             self.assertIn("pressure", csv_content)
             csv_lines = csv_content.strip().splitlines()
-            self.assertEqual(len(csv_lines), len(sim.gas_solution.states) + 1)  # header + data
+            # CSV now includes a "# UNITS: {...}" comment line at the top, plus header row, plus data rows
+            self.assertEqual(len(csv_lines), len(sim.gas_solution.states) + 2)  # units comment + header + data
 
             # JSON artifact exists and is valid
             json_path = Path(sim.output_metadata.json_path)

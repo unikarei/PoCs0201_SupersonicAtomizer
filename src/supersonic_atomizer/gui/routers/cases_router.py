@@ -13,8 +13,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import PlainTextResponse, Response
+
+from supersonic_atomizer.gui.dependencies import get_gui_state
+from supersonic_atomizer.gui.state import GUIState
 
 from supersonic_atomizer.gui.case_store import CaseNameError, CaseNotFoundError, CaseStore, ProjectNameError, ProjectNotFoundError
 from supersonic_atomizer.gui.job_store import get_job_store

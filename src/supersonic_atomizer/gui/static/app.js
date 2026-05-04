@@ -36,7 +36,114 @@ const MIN_LEFT_PANEL_WIDTH = 180;
 const MAX_LEFT_PANEL_WIDTH = 520;
 const MIN_RIGHT_PANEL_WIDTH = 280;
 
-// ── Utilities ─────────────────────────────────────────────────────────────────
+// ── Unit conversion state ──────────────────────────────────────────────────
+// Loaded from /api/units/groups — keyed by group name.
+// Each group: { [unitLabel]: { scale: number, offset: number } }
+let unitGroupSpecs = {};
+
+// Maps input field name → unit group name for inline unit selectors.
+const INPUT_FIELD_UNIT_GROUP = {
+  // Boundary Conditions
+  Pt_in:  "pressure",
+  Tt_in:  "temperature",
+  Ps_out: "pressure",
+  inlet_wetness: "dimensionless",
+  // Droplet Injection
+  droplet_velocity_in: "velocity",
+  liquid_jet_diameter: "diameter",
+  liquid_velocity: "velocity",
+  liquid_density: "density",
+  liquid_viscosity: "viscosity",
+  liquid_mass_flow_rate: "mass_flow",
+  water_mass_flow_rate: "mass_flow",
+  water_mass_flow_rate_percent: "dimensionless",
+  // Breakup Parameters
+  khrt_liquid_density: "density",
+  khrt_liquid_viscosity: "viscosity",
+  primary_breakup_coefficient: "dimensionless",
+  critical_weber_number: "dimensionless",
+  breakup_factor_mean: "dimensionless",
+  breakup_factor_max: "dimensionless",
+  khrt_B0: "dimensionless",
+  khrt_B1: "dimensionless",
+  khrt_Crt: "dimensionless",
+  // Droplet Size
+  droplet_diameter_mean_in: "diameter",
+  droplet_diameter_max_in:  "diameter",
+  tab_reduction_fraction: "dimensionless",
+  tab_spring_k: "spring_constant",
+  tab_damping_c: "damping",
+  tab_breakup_threshold: "dimensionless",
+  // Grid
+  x_start: "length",
+  x_end:   "length",
+  // Note: fields with no matching group (mass flow, viscosity, surface_tension, 
+  // and dimensionless numbers) are not converted.
+};
+
+/**
+ * Convert a single SI value to the given display unit.
+ * Formula: display = si * scale + offset
+ */
+function siToDisplay(siValue, group, unitLabel) {
+  const spec = (unitGroupSpecs[group] || {})[unitLabel];
+  if (!spec) return siValue;
+  return siValue * spec.scale + spec.offset;
+}
+
+/**
+ * Convert a single display value back to SI.
+ * Formula: si = (display - offset) / scale
+ */
+function displayToSi(displayValue, group, unitLabel) {
+  const spec = (unitGroupSpecs[group] || {})[unitLabel];
+  if (!spec) return displayValue;
+  return (displayValue - spec.offset) / spec.scale;
+}
+
+/**
+ * Convert a multi-token string of SI values to display unit string.
+ * Tokens may be separated by spaces, commas, semicolons, etc.
+ */
+function convertSiStringToDisplay(rawSiString, group, unitLabel) {
+  if (rawSiString === null || rawSiString === undefined || String(rawSiString).trim() === "") {
+    return String(rawSiString ?? "");
+  }
+  const tokens = String(rawSiString).trim().split(MULTI_VALUE_SPLIT_RE).filter(Boolean);
+  if (tokens.length === 0) return "";
+  return tokens.map(t => {
+    const v = Number(t);
+    if (Number.isNaN(v)) return t;
+    return String(siToDisplay(v, group, unitLabel));
+  }).join(" ");
+}
+
+/**
+ * Convert a multi-token string of display values back to SI values string.
+ */
+function convertDisplayStringToSi(rawDisplayString, group, unitLabel) {
+  if (rawDisplayString === null || rawDisplayString === undefined || String(rawDisplayString).trim() === "") {
+    return String(rawDisplayString ?? "");
+  }
+  const tokens = String(rawDisplayString).trim().split(MULTI_VALUE_SPLIT_RE).filter(Boolean);
+  if (tokens.length === 0) return "";
+  return tokens.map(t => {
+    const v = Number(t);
+    if (Number.isNaN(v)) return t;
+    return String(displayToSi(v, group, unitLabel));
+  }).join(" ");
+}
+
+/**
+ * Return the currently selected unit label for a given BC input field.
+ * Falls back to "Pa" for pressure, "K" for temperature if selector not found.
+ */
+function getInputUnitLabel(fieldName) {
+  const sel = document.getElementById("unit-in-" + fieldName);
+  return sel ? sel.value : null;
+}
+
+
 async function apiFetch(url, options = {}) {
   const res = await fetch(url, { credentials: "same-origin", ...options });
   if (!res.ok) {
@@ -1444,29 +1551,30 @@ function populateConditionsForm(cfg) {
   const workingFluid = fl.working_fluid || "air";
   setFieldValue(f, "working_fluid", workingFluid);
   updateInletWetnessState(workingFluid);
-  setFieldValue(f, "inlet_wetness", fl.inlet_wetness ?? "");
-  setFieldValue(f, "Pt_in", bc.Pt_in ?? "");
-  setFieldValue(f, "Tt_in", bc.Tt_in ?? "");
-  setFieldValue(f, "Ps_out", bc.Ps_out ?? "");
+  setFieldValue(f, "inlet_wetness", convertSiStringToDisplay(fl.inlet_wetness ?? "", "dimensionless", getInputUnitLabel("inlet_wetness")));
+  // BC fields: convert from SI (stored) to current display unit
+  setFieldValue(f, "Pt_in",  convertSiStringToDisplay(String(bc.Pt_in  ?? ""), "pressure",    getInputUnitLabel("Pt_in")  || "Pa"));
+  setFieldValue(f, "Tt_in",  convertSiStringToDisplay(String(bc.Tt_in  ?? ""), "temperature", getInputUnitLabel("Tt_in")  || "K"));
+  setFieldValue(f, "Ps_out", convertSiStringToDisplay(String(bc.Ps_out ?? ""), "pressure",    getInputUnitLabel("Ps_out") || "Pa"));
   setFieldValue(f, "droplet_velocity_in", di.droplet_velocity_in ?? "");
   setFieldValue(f, "injection_mode", di.injection_mode ?? "droplet_injection");
   updateInjectionModeState(di.injection_mode ?? "droplet_injection");
   setFieldValue(f, "liquid_material", di.liquid_material ?? "water");
   updateLiquidMaterialState(di.liquid_material ?? "water");
   setSelectedInputBasis(f, di.input_basis ?? "diameter_based");
-  setFieldValue(f, "liquid_jet_diameter", di.liquid_jet_diameter ?? "");
-  setFieldValue(f, "liquid_mass_flow_rate", di.liquid_mass_flow_rate ?? "");
-  setFieldValue(f, "liquid_velocity", di.liquid_velocity ?? "");
-  setFieldValue(f, "liquid_density", di.liquid_density ?? "");
+  setFieldValue(f, "liquid_jet_diameter", convertSiStringToDisplay(di.liquid_jet_diameter ?? "", "diameter", getInputUnitLabel("liquid_jet_diameter")));
+  setFieldValue(f, "liquid_mass_flow_rate", convertSiStringToDisplay(di.liquid_mass_flow_rate ?? "", "mass_flow", getInputUnitLabel("liquid_mass_flow_rate")));
+  setFieldValue(f, "liquid_velocity", convertSiStringToDisplay(di.liquid_velocity ?? "", "velocity", getInputUnitLabel("liquid_velocity")));
+  setFieldValue(f, "liquid_density", convertSiStringToDisplay(di.liquid_density ?? "", "density", getInputUnitLabel("liquid_density")));
   updateLiquidJetInputModeUI();
   recomputeLiquidJetDerivedField();
-  setFieldValue(f, "liquid_viscosity", di.liquid_viscosity ?? "");
-  setFieldValue(f, "surface_tension", di.surface_tension ?? "");
+  setFieldValue(f, "liquid_viscosity", convertSiStringToDisplay(di.liquid_viscosity ?? "", "viscosity", getInputUnitLabel("liquid_viscosity")));
+  setFieldValue(f, "surface_tension", convertSiStringToDisplay(di.surface_tension ?? "", "surface_tension", getInputUnitLabel("surface_tension")));
   setFieldValue(f, "primary_breakup_model", di.primary_breakup_model ?? "empirical");
-  setFieldValue(f, "primary_breakup_coefficient", di.primary_breakup_coefficient ?? "");
+  setFieldValue(f, "primary_breakup_coefficient", convertSiStringToDisplay(di.primary_breakup_coefficient ?? "", "dimensionless", getInputUnitLabel("primary_breakup_coefficient")));
   setFieldValue(f, "initial_SMD_model", di.initial_SMD_model ?? "fraction_of_jet");
-  setFieldValue(f, "water_mass_flow_rate", di.water_mass_flow_rate ?? "");
-  setFieldValue(f, "water_mass_flow_rate_percent", di.water_mass_flow_rate_percent ?? "");
+  setFieldValue(f, "water_mass_flow_rate", convertSiStringToDisplay(di.water_mass_flow_rate ?? "", "mass_flow", getInputUnitLabel("water_mass_flow_rate")));
+  setFieldValue(f, "water_mass_flow_rate_percent", convertSiStringToDisplay(di.water_mass_flow_rate_percent ?? "", "dimensionless", getInputUnitLabel("water_mass_flow_rate_percent")));
   const hasKgPerS = di.water_mass_flow_rate !== undefined && di.water_mass_flow_rate !== null && String(di.water_mass_flow_rate) !== "";
   const hasPercent = di.water_mass_flow_rate_percent !== undefined && di.water_mass_flow_rate_percent !== null && String(di.water_mass_flow_rate_percent) !== "";
   setFieldValue(
@@ -1475,8 +1583,8 @@ function populateConditionsForm(cfg) {
     hasPercent && !hasKgPerS ? "percent" : "kg_per_s"
   );
   updateWaterMassFlowSectionUI();
-  setFieldValue(f, "droplet_diameter_mean_in", di.droplet_diameter_mean_in ?? "");
-  setFieldValue(f, "droplet_diameter_max_in", di.droplet_diameter_max_in ?? "");
+  setFieldValue(f, "droplet_diameter_mean_in", convertSiStringToDisplay(di.droplet_diameter_mean_in ?? "", "diameter", getInputUnitLabel("droplet_diameter_mean_in")));
+  setFieldValue(f, "droplet_diameter_max_in",  convertSiStringToDisplay(di.droplet_diameter_max_in  ?? "", "diameter", getInputUnitLabel("droplet_diameter_max_in")));
   setFieldValue(f, "coupling_mode", ms.coupling_mode ?? "one_way");
   const breakupModel = ms.breakup_model || "weber_critical";
   setFieldValue(f, "breakup_model", breakupModel);
@@ -1485,16 +1593,16 @@ function populateConditionsForm(cfg) {
   // never blank after selecting a model.
   const wd = MODEL_DEFAULTS.weber_critical;
   const kd = MODEL_DEFAULTS.khrt;
-  setFieldValue(f, "critical_weber_number", ms.critical_weber_number ?? wd.critical_weber_number);
-  setFieldValue(f, "breakup_factor_mean",   ms.breakup_factor_mean   ?? wd.breakup_factor_mean);
-  setFieldValue(f, "breakup_factor_max",    ms.breakup_factor_max    ?? wd.breakup_factor_max);
-  setFieldValue(f, "khrt_B0",          ms.khrt_B0          ?? kd.khrt_B0);
-  setFieldValue(f, "khrt_B1",          ms.khrt_B1          ?? kd.khrt_B1);
-  setFieldValue(f, "khrt_Crt",         ms.khrt_Crt         ?? kd.khrt_Crt);
-  setFieldValue(f, "liquid_density",   ms.liquid_density   ?? kd.liquid_density);
-  setFieldValue(f, "liquid_viscosity", ms.liquid_viscosity ?? kd.liquid_viscosity);
-  setFieldValue(f, "khrt_liquid_density",   ms.liquid_density   ?? kd.liquid_density);
-  setFieldValue(f, "khrt_liquid_viscosity", ms.liquid_viscosity ?? kd.liquid_viscosity);
+  setFieldValue(f, "critical_weber_number", convertSiStringToDisplay(ms.critical_weber_number ?? wd.critical_weber_number, "dimensionless", getInputUnitLabel("critical_weber_number")));
+  setFieldValue(f, "breakup_factor_mean",   convertSiStringToDisplay(ms.breakup_factor_mean   ?? wd.breakup_factor_mean, "dimensionless", getInputUnitLabel("breakup_factor_mean")));
+  setFieldValue(f, "breakup_factor_max",    convertSiStringToDisplay(ms.breakup_factor_max    ?? wd.breakup_factor_max, "dimensionless", getInputUnitLabel("breakup_factor_max")));
+  setFieldValue(f, "khrt_B0",          convertSiStringToDisplay(ms.khrt_B0          ?? kd.khrt_B0, "dimensionless", getInputUnitLabel("khrt_B0")));
+  setFieldValue(f, "khrt_B1",          convertSiStringToDisplay(ms.khrt_B1          ?? kd.khrt_B1, "dimensionless", getInputUnitLabel("khrt_B1")));
+  setFieldValue(f, "khrt_Crt",         convertSiStringToDisplay(ms.khrt_Crt         ?? kd.khrt_Crt, "dimensionless", getInputUnitLabel("khrt_Crt")));
+  setFieldValue(f, "liquid_density",   convertSiStringToDisplay(ms.liquid_density   ?? kd.liquid_density, "density", getInputUnitLabel("liquid_density")));
+  setFieldValue(f, "liquid_viscosity", convertSiStringToDisplay(ms.liquid_viscosity ?? kd.liquid_viscosity, "viscosity", getInputUnitLabel("liquid_viscosity")));
+  setFieldValue(f, "khrt_liquid_density",   convertSiStringToDisplay(ms.liquid_density   ?? kd.liquid_density, "density", getInputUnitLabel("khrt_liquid_density")));
+  setFieldValue(f, "khrt_liquid_viscosity", convertSiStringToDisplay(ms.liquid_viscosity ?? kd.liquid_viscosity, "viscosity", getInputUnitLabel("khrt_liquid_viscosity")));
 }
 
 function setFieldValue(form, name, value) {
@@ -1579,6 +1687,19 @@ function parseNumericOrList(rawValue, label, { optional = false } = {}) {
   return nums.length === 1 ? nums[0] : nums;
 }
 
+/**
+ * Like parseNumericOrList but first converts the value from the field's
+ * currently-selected display unit back to SI.
+ */
+function parseBcValueSi(rawValue, fieldName, label, opts = {}) {
+  const unitLabel = getInputUnitLabel(fieldName);
+  const group     = INPUT_FIELD_UNIT_GROUP[fieldName];
+  const siStr = (unitLabel && group)
+    ? convertDisplayStringToSi(rawValue, group, unitLabel)
+    : rawValue;
+  return parseNumericOrList(siStr, label, opts);
+}
+
 function readConditionsFormForRun() {
   const f = document.getElementById("conditions-form");
   const fl = f.elements.working_fluid.value;
@@ -1588,45 +1709,45 @@ function readConditionsFormForRun() {
   const cfg = {
     fluid: { working_fluid: fl },
     boundary_conditions: {
-      Pt_in:  parseNumericOrList(f.elements.Pt_in.value, "Inlet total pressure P₀ [Pa]"),
-      Tt_in:  parseNumericOrList(f.elements.Tt_in.value, "Inlet total temperature T₀ [K]"),
-      Ps_out: parseNumericOrList(f.elements.Ps_out.value, "Outlet static pressure P₂ [Pa]"),
+      Pt_in:  parseBcValueSi(f.elements.Pt_in.value,  "Pt_in",  "Inlet total pressure P₀"),
+      Tt_in:  parseBcValueSi(f.elements.Tt_in.value,  "Tt_in",  "Inlet total temperature T₀"),
+      Ps_out: parseBcValueSi(f.elements.Ps_out.value, "Ps_out", "Outlet static pressure P₂"),
     },
     droplet_injection: {
-      droplet_velocity_in:      isLiquidJet ? null : parseNumericOrList(f.elements.droplet_velocity_in.value, "Initial droplet velocity [m/s]"),
+      droplet_velocity_in:      isLiquidJet ? null : parseBcValueSi(f.elements.droplet_velocity_in.value, "droplet_velocity_in", "Initial droplet velocity"),
       injection_mode:           injectionMode,
       input_basis:              getSelectedInputBasis(f),
       liquid_material:          (f.elements.liquid_material && f.elements.liquid_material.value) || "water",
-      liquid_jet_diameter:      parseNumericOrList(f.elements.liquid_jet_diameter?.value, "Liquid-jet diameter [m]", { optional: true }),
-      liquid_mass_flow_rate:    parseNumericOrList(f.elements.liquid_mass_flow_rate?.value, "Liquid mass flow rate [kg/s]", { optional: true }),
-      liquid_velocity:          parseNumericOrList(f.elements.liquid_velocity?.value, "Liquid velocity [m/s]", { optional: true }),
-      liquid_density:           parseNumericOrList(f.elements.liquid_density?.value, "Liquid density [kg/m³]", { optional: true }),
-      liquid_viscosity:         parseNumericOrList(f.elements.liquid_viscosity?.value, "Liquid viscosity [Pa·s]", { optional: true }),
-      surface_tension:          parseNumericOrList(f.elements.surface_tension?.value, "Surface tension [N/m]", { optional: true }),
+      liquid_jet_diameter:      parseBcValueSi(f.elements.liquid_jet_diameter?.value, "liquid_jet_diameter", "Liquid-jet diameter", { optional: true }),
+      liquid_mass_flow_rate:    parseBcValueSi(f.elements.liquid_mass_flow_rate?.value, "liquid_mass_flow_rate", "Liquid mass flow rate", { optional: true }),
+      liquid_velocity:          parseBcValueSi(f.elements.liquid_velocity?.value, "liquid_velocity", "Liquid velocity", { optional: true }),
+      liquid_density:           parseBcValueSi(f.elements.liquid_density?.value, "liquid_density", "Liquid density", { optional: true }),
+      liquid_viscosity:         parseBcValueSi(f.elements.liquid_viscosity?.value, "liquid_viscosity", "Liquid viscosity", { optional: true }),
+      surface_tension:          parseBcValueSi(f.elements.surface_tension?.value, "surface_tension", "Surface tension", { optional: true }),
       primary_breakup_model:    (f.elements.primary_breakup_model && f.elements.primary_breakup_model.value) || null,
-      primary_breakup_coefficient: parseNumericOrList(f.elements.primary_breakup_coefficient?.value, "Primary breakup coefficient", { optional: true }),
+      primary_breakup_coefficient: parseBcValueSi(f.elements.primary_breakup_coefficient?.value, "primary_breakup_coefficient", "Primary breakup coefficient", { optional: true }),
       initial_SMD_model:        (f.elements.initial_SMD_model && f.elements.initial_SMD_model.value) || null,
-      droplet_diameter_mean_in: isLiquidJet ? null : parseNumericOrList(f.elements.droplet_diameter_mean_in.value, "Mean droplet diameter [m]"),
-      droplet_diameter_max_in:  isLiquidJet ? null : parseNumericOrList(f.elements.droplet_diameter_max_in.value, "Maximum droplet diameter [m]"),
+      droplet_diameter_mean_in: isLiquidJet ? null : parseBcValueSi(f.elements.droplet_diameter_mean_in.value, "droplet_diameter_mean_in", "Mean droplet diameter"),
+      droplet_diameter_max_in:  isLiquidJet ? null : parseBcValueSi(f.elements.droplet_diameter_max_in.value,  "droplet_diameter_max_in",  "Maximum droplet diameter"),
     },
     models: {
       coupling_mode:         couplingMode,
       breakup_model:         f.elements.breakup_model.value,
-      critical_weber_number: parseNumericOrList(f.elements.critical_weber_number.value, "Critical Weber number", { optional: true }),
-      breakup_factor_mean:   parseNumericOrList(f.elements.breakup_factor_mean.value, "Breakup factor — mean diameter", { optional: true }),
-      breakup_factor_max:    parseNumericOrList(f.elements.breakup_factor_max.value, "Breakup factor — maximum diameter", { optional: true }),
-      khrt_B0:               parseNumericOrList(f.elements.khrt_B0.value, "KH wavelength coefficient B₀", { optional: true }),
-      khrt_B1:               parseNumericOrList(f.elements.khrt_B1.value, "KH breakup time coefficient B₁", { optional: true }),
-      khrt_Crt:              parseNumericOrList(f.elements.khrt_Crt.value, "RT wavelength coefficient C_RT", { optional: true }),
-      liquid_density:        parseNumericOrList(f.elements.khrt_liquid_density?.value, "Liquid density [kg/m³] (KH-RT)", { optional: true }),
-      liquid_viscosity:      parseNumericOrList(f.elements.khrt_liquid_viscosity?.value, "Liquid viscosity [Pa·s] (KH-RT)", { optional: true }),
+      critical_weber_number: parseBcValueSi(f.elements.critical_weber_number.value, "critical_weber_number", "Critical Weber number", { optional: true }),
+      breakup_factor_mean:   parseBcValueSi(f.elements.breakup_factor_mean.value, "breakup_factor_mean", "Breakup factor — mean diameter", { optional: true }),
+      breakup_factor_max:    parseBcValueSi(f.elements.breakup_factor_max.value, "breakup_factor_max", "Breakup factor — maximum diameter", { optional: true }),
+      khrt_B0:               parseBcValueSi(f.elements.khrt_B0.value, "khrt_B0", "KH wavelength coefficient B₀", { optional: true }),
+      khrt_B1:               parseBcValueSi(f.elements.khrt_B1.value, "khrt_B1", "KH breakup time coefficient B₁", { optional: true }),
+      khrt_Crt:              parseBcValueSi(f.elements.khrt_Crt.value, "khrt_Crt", "RT wavelength coefficient C_RT", { optional: true }),
+      liquid_density:        parseBcValueSi(f.elements.khrt_liquid_density?.value, "khrt_liquid_density", "Liquid density (KH-RT)", { optional: true }),
+      liquid_viscosity:      parseBcValueSi(f.elements.khrt_liquid_viscosity?.value, "khrt_liquid_viscosity", "Liquid viscosity (KH-RT)", { optional: true }),
     },
   };
-  const wetness = parseNumericOrList(f.elements.inlet_wetness.value, "Inlet wetness", { optional: true });
+  const wetness = parseBcValueSi(f.elements.inlet_wetness.value, "inlet_wetness", "Inlet wetness", { optional: true });
   cfg.fluid.inlet_wetness = wetness === null ? null : wetness;
   const waterMassFlowMode = f.elements.water_mass_flow_mode.value;
-  const waterMassFlowRate = parseNumericOrList(f.elements.water_mass_flow_rate.value, "Water mass flow rate [kg/s]", { optional: true });
-  const waterMassFlowRatePercent = parseNumericOrList(f.elements.water_mass_flow_rate_percent.value, "Water mass flow rate [% of gas]", { optional: true });
+  const waterMassFlowRate = parseBcValueSi(f.elements.water_mass_flow_rate.value, "water_mass_flow_rate", "Water mass flow rate", { optional: true });
+  const waterMassFlowRatePercent = parseBcValueSi(f.elements.water_mass_flow_rate_percent.value, "water_mass_flow_rate_percent", "Water mass flow rate percent", { optional: true });
   if (waterMassFlowMode === "percent") {
     cfg.droplet_injection.water_mass_flow_rate = null;
     if (waterMassFlowRatePercent !== null) {
@@ -1649,9 +1770,9 @@ function readConditionsFormForSave() {
   const cfg = {
     fluid: { working_fluid: f.elements.working_fluid.value },
     boundary_conditions: {
-      Pt_in: parseNumericOrList(f.elements.Pt_in.value, "Inlet total pressure P₀ [Pa]"),
-      Tt_in: parseNumericOrList(f.elements.Tt_in.value, "Inlet total temperature T₀ [K]"),
-      Ps_out: parseNumericOrList(f.elements.Ps_out.value, "Outlet static pressure P₂ [Pa]"),
+      Pt_in:  parseBcValueSi(f.elements.Pt_in.value,  "Pt_in",  "Inlet total pressure P₀"),
+      Tt_in:  parseBcValueSi(f.elements.Tt_in.value,  "Tt_in",  "Inlet total temperature T₀"),
+      Ps_out: parseBcValueSi(f.elements.Ps_out.value, "Ps_out", "Outlet static pressure P₂"),
     },
     droplet_injection: {
       droplet_velocity_in: isLiquidJet ? null : parseNumericOrList(f.elements.droplet_velocity_in.value, "Initial droplet velocity [m/s]"),
@@ -1667,8 +1788,8 @@ function readConditionsFormForSave() {
       primary_breakup_model: (f.elements.primary_breakup_model && f.elements.primary_breakup_model.value) || null,
       primary_breakup_coefficient: parseNumericOrList(f.elements.primary_breakup_coefficient?.value, "Primary breakup coefficient", { optional: true }),
       initial_SMD_model:    (f.elements.initial_SMD_model && f.elements.initial_SMD_model.value) || null,
-      droplet_diameter_mean_in: isLiquidJet ? null : parseNumericOrList(f.elements.droplet_diameter_mean_in.value, "Mean droplet diameter [m]"),
-      droplet_diameter_max_in: isLiquidJet ? null : parseNumericOrList(f.elements.droplet_diameter_max_in.value, "Maximum droplet diameter [m]"),
+      droplet_diameter_mean_in: isLiquidJet ? null : parseBcValueSi(f.elements.droplet_diameter_mean_in.value, "droplet_diameter_mean_in", "Mean droplet diameter"),
+      droplet_diameter_max_in:  isLiquidJet ? null : parseBcValueSi(f.elements.droplet_diameter_max_in.value,  "droplet_diameter_max_in",  "Maximum droplet diameter"),
     },
     models: {
       coupling_mode: couplingMode,
@@ -1757,8 +1878,9 @@ document.getElementById("btn-save-conditions").addEventListener("click", async (
 function populateGridForm(cfg) {
   const f = document.getElementById("grid-form");
   const geo = cfg.geometry || {};
-  setFieldValue(f, "x_start", geo.x_start ?? 0);
-  setFieldValue(f, "x_end", geo.x_end ?? 0.1);
+  // Grid fields: convert from SI (stored) to current display unit
+  setFieldValue(f, "x_start", convertSiStringToDisplay(String(geo.x_start ?? 0), "length", getInputUnitLabel("x_start") || "m"));
+  setFieldValue(f, "x_end", convertSiStringToDisplay(String(geo.x_end ?? 0.1), "length", getInputUnitLabel("x_end") || "m"));
   // Support both current key (n_cells) and legacy key (num_cells).
   setFieldValue(f, "n_cells", geo.n_cells ?? geo.num_cells ?? 100);
 
@@ -1891,8 +2013,11 @@ function drawAreaPreview(xs, As) {
 function readGridForm() {
   const f = document.getElementById("grid-form");
   const area = readAreaTable();
-  const xStart = parseFloat(f.elements.x_start.value);
-  const xEnd = parseFloat(f.elements.x_end.value);
+  // Convert from display unit back to SI
+  const xStartDisplay = f.elements.x_start.value;
+  const xEndDisplay = f.elements.x_end.value;
+  const xStart = parseFloat(convertDisplayStringToSi(String(xStartDisplay), "length", getInputUnitLabel("x_start") || "m"));
+  const xEnd = parseFloat(convertDisplayStringToSi(String(xEndDisplay), "length", getInputUnitLabel("x_end") || "m"));
   // Ensure area table endpoints include x_start and x_end. If the user
   // provided a table that doesn't include them, prepend/append entries
   // copying the nearest A value so the solver receives matching endpoints.
@@ -2174,9 +2299,9 @@ function collectSummaryConditions() {
   return [
     `Project / Case: ${formatReportValue(activeProjectName || defaultProjectName)} / ${formatReportValue(activeCaseName)}`,
     `Working fluid: ${formatReportValue(conditionsForm.elements.working_fluid?.value)}`,
-    `Inlet total pressure P0 [Pa]: ${formatReportValue(conditionsForm.elements.Pt_in?.value)}`,
-    `Inlet total temperature T0 [K]: ${formatReportValue(conditionsForm.elements.Tt_in?.value)}`,
-    `Outlet static pressure P2 [Pa]: ${formatReportValue(conditionsForm.elements.Ps_out?.value)}`,
+    `Inlet total pressure P0 [${getInputUnitLabel("Pt_in") || "Pa"}]: ${formatReportValue(conditionsForm.elements.Pt_in?.value)}`,
+    `Inlet total temperature T0 [${getInputUnitLabel("Tt_in") || "K"}]: ${formatReportValue(conditionsForm.elements.Tt_in?.value)}`,
+    `Outlet static pressure P2 [${getInputUnitLabel("Ps_out") || "Pa"}]: ${formatReportValue(conditionsForm.elements.Ps_out?.value)}`,
     `Injection mode: ${formatReportValue(conditionsForm.elements.injection_mode?.value)}`,
     `Breakup model: ${formatReportValue(conditionsForm.elements.breakup_model?.value)}`,
     `Coupling mode: ${formatReportValue(conditionsForm.elements.coupling_mode?.value)}`,
@@ -2188,8 +2313,8 @@ function collectGridSummary() {
   const areaRows = Array.from(document.querySelectorAll("#area-table-body tr")).length;
   if (!gridForm) return [];
   return [
-    `x start [m]: ${formatReportValue(gridForm.elements.x_start?.value)}`,
-    `x end [m]: ${formatReportValue(gridForm.elements.x_end?.value)}`,
+    `x start [${getInputUnitLabel("x_start") || "m"}]: ${formatReportValue(gridForm.elements.x_start?.value)}`,
+    `x end [${getInputUnitLabel("x_end") || "m"}]: ${formatReportValue(gridForm.elements.x_end?.value)}`,
     `Number of cells: ${formatReportValue(gridForm.elements.n_cells?.value)}`,
     `Area table points: ${areaRows}`,
   ];
@@ -2313,9 +2438,21 @@ document.getElementById("chat-input").addEventListener("keydown", async event =>
 // ── Settings tab: unit preferences ────────────────────────────────────────
 async function loadUnitGroups() {
   try {
+    console.log("Starting loadUnitGroups...");
     const groups  = await apiFetch("/api/units/groups");
     const current = await apiFetch("/api/units/preferences");
+    console.log("Unit groups loaded:", groups);
+    console.log("Current preferences:", current);
+
+    // Store specs for client-side conversion
+    unitGroupSpecs = groups;
+
+    // ── Settings tab selectors ───────────────────────────────────────────
     const container = document.getElementById("unit-group-controls");
+    if (!container) {
+      console.error("unit-group-controls container not found!");
+      return;
+    }
     container.innerHTML = "";
     Object.entries(groups).forEach(([group, options]) => {
       const row = document.createElement("div");
@@ -2325,7 +2462,9 @@ async function loadUnitGroups() {
       const sel = document.createElement("select");
       sel.id = "unit-sel-" + group;
       sel.dataset.group = group;
-      options.forEach(opt => {
+      const optionLabels = Object.keys(options);
+      console.log(`Group '${group}' options:`, optionLabels);
+      optionLabels.forEach(opt => {
         const option = document.createElement("option");
         option.value = opt;
         option.textContent = opt;
@@ -2336,8 +2475,62 @@ async function loadUnitGroups() {
       row.appendChild(sel);
       container.appendChild(row);
     });
+
+    // ── Inline input-field unit selectors ────────────────────────────────
+    const selectors = document.querySelectorAll(".unit-input-sel");
+    console.log(`Found ${selectors.length} unit-input-sel elements`);
+    
+    selectors.forEach((sel, idx) => {
+      const group = sel.dataset.group;
+      const fieldName = sel.dataset.field;
+      console.log(`[${idx}] Processing selector for field '${fieldName}' (group '${group}')`);
+      
+      // Skip if no unit group (dimensionless or special)
+      if (!group || !groups[group]) {
+        console.log(`  → Skipping (no group or group not in API response)`);
+        sel.style.display = "none";
+        return;
+      }
+      
+      sel.innerHTML = "";
+      const optionLabels = Object.keys(groups[group]);
+      console.log(`  → Adding ${optionLabels.length} options: ${optionLabels.join(", ")}`);
+      optionLabels.forEach(opt => {
+        const option = document.createElement("option");
+        option.value = opt;
+        option.textContent = opt;
+        if (opt === current[group]) option.selected = true;
+        sel.appendChild(option);
+      });
+      sel.style.display = "";  // Ensure visible if there are options
+
+      // When unit changes: convert the currently-displayed value
+      sel.addEventListener("change", () => {
+        const input = document.querySelector(`[name="${fieldName}"]`);
+        if (!input || (input.value && input.value.trim ? input.value.trim() === "" : input.value === "")) return;
+        const prevUnit = sel._prevUnit || sel.value;
+        const newUnit  = sel.value;
+        if (prevUnit === newUnit) return;
+        // Convert displayed value: prevUnit-display → SI → newUnit-display
+        const siStr = convertDisplayStringToSi(String(input.value), group, prevUnit);
+        input.value = convertSiStringToDisplay(siStr, group, newUnit);
+        sel._prevUnit = newUnit;
+      });
+      sel._prevUnit = sel.value;
+
+      // Convert the default field value from SI to the preferred display unit.
+      // The HTML default values are always in SI.
+      const input = document.querySelector(`[name="${fieldName}"]`);
+      if (input && (input.value && input.value.trim ? input.value.trim() !== "" : input.value !== "")) {
+        const prefUnit = current[group];
+        if (prefUnit) {
+          input.value = convertSiStringToDisplay(String(input.value), group, prefUnit);
+        }
+      }
+    });
+
   } catch (e) {
-    console.warn("Failed to load unit groups:", e);
+    console.error("Failed to load unit groups:", e);
   }
 }
 
@@ -2361,11 +2554,28 @@ document.getElementById("btn-save-units").addEventListener("click", async () => 
 });
 
 // ── Initialisation ─────────────────────────────────────────────────────────
-(async function init() {
+async function init() {
+  console.log("init() starting...");
   initializeSidebarResizeHandle();
   initializeRightSidebarResizeHandle();
   initializeChatVoiceInput();
+  console.log("About to loadProjectList...");
   await loadProjectList();
+  console.log("About to loadUnitGroups...");
   await loadUnitGroups();
+  console.log("About to updateChatPanelState...");
   updateChatPanelState();
-})();
+  console.log("init() complete!");
+}
+
+// Wait for DOM to be fully loaded before initializing
+if (document.readyState === "loading") {
+  console.log("Document still loading, waiting for DOMContentLoaded...");
+  document.addEventListener("DOMContentLoaded", () => {
+    console.log("DOMContentLoaded fired, calling init...");
+    init().catch(err => console.error("init() error:", err));
+  });
+} else {
+  console.log("Document already loaded, calling init immediately...");
+  init().catch(err => console.error("init() error:", err));
+}

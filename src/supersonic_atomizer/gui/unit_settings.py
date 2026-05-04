@@ -82,6 +82,25 @@ UNIT_GROUPS: dict[str, dict[str, UnitSpec]] = {
     "density": {
         "kg/m³": UnitSpec("kg/m³", 1.0),
     },
+    "viscosity": {
+        "Pa·s": UnitSpec("Pa·s", 1.0),
+    },
+    "surface_tension": {
+        "N/m": UnitSpec("N/m", 1.0),
+    },
+    "mass_flow": {
+        "kg/s": UnitSpec("kg/s", 1.0),
+    },
+    "dimensionless": {
+        "-": UnitSpec("-", 1.0),
+        "%": UnitSpec("%", 100.0),
+    },
+    "spring_constant": {
+        "N/m": UnitSpec("N/m", 1.0),
+    },
+    "damping": {
+        "kg/s": UnitSpec("kg/s", 1.0),
+    },
 }
 
 # Default display unit label for each group.
@@ -93,6 +112,12 @@ DEFAULT_UNITS: dict[str, str] = {
     "length":      "m",
     "area":        "m²",
     "density":     "kg/m³",
+    "viscosity":   "Pa·s",
+    "surface_tension": "N/m",
+    "mass_flow":   "kg/s",
+    "dimensionless": "-",
+    "spring_constant": "N/m",
+    "damping": "kg/s",
 }
 
 # Maps output-field names to their unit group.

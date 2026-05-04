@@ -979,6 +979,24 @@ input[readonly] {
   width: 180px;
 }
 
+/* ── Inline input + unit selector (Boundary Conditions fields) ─────────── */
+.input-with-unit {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.input-with-unit input[type="text"] {
+  flex: 1;
+  min-width: 0;
+}
+
+.unit-input-sel {
+  width: 55px;
+  flex-shrink: 0;
+  font-size: 0.85rem;
+}
+
 /* ── Breakup model: select + ? button on same inline row ─────────────────── */
 .select-with-help {
   display: inline-flex;

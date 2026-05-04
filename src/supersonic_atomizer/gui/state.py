@@ -74,6 +74,12 @@ class GUIState:
     unit_length:      str = "m"
     unit_area:        str = "m²"
     unit_density:     str = "kg/m³"
+    unit_viscosity:   str = "Pa·s"
+    unit_surface_tension: str = "N/m"
+    unit_mass_flow:   str = "kg/s"
+    unit_dimensionless: str = "-"
+    unit_spring_constant: str = "N/m"
+    unit_damping: str = "kg/s"
 
     # ── Solver execution state ─────────────────────────────────────────────────
     solver_running: bool = False
@@ -124,4 +130,10 @@ class GUIState:
             "length":      self.unit_length,
             "area":        self.unit_area,
             "density":     self.unit_density,
+            "viscosity":   self.unit_viscosity,
+            "surface_tension": self.unit_surface_tension,
+            "mass_flow":   self.unit_mass_flow,
+            "dimensionless": self.unit_dimensionless,
+            "spring_constant": self.unit_spring_constant,
+            "damping": self.unit_damping,
         }

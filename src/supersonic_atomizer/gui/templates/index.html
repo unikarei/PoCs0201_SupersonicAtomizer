@@ -54,21 +54,33 @@
           </label>
           <div id="inlet-wetness-row" class="hidden">
             <label>Inlet wetness (steam only, optional)
-              <input type="text" name="inlet_wetness" inputmode="decimal" placeholder="e.g. 0.05 or 0.0, 0.05" />
+              <span class="input-with-unit">
+                <input type="text" name="inlet_wetness" inputmode="decimal" placeholder="e.g. 0.05 or 0.0, 0.05" />
+                <select id="unit-in-inlet_wetness" class="unit-input-sel" data-group="dimensionless" data-field="inlet_wetness"><option>(loading...)</option></select>
+              </span>
             </label>
           </div>
         </fieldset>
 
         <fieldset>
           <legend>Boundary Conditions</legend>
-          <label>Inlet total pressure P₀ [Pa]
-            <input type="text" name="Pt_in" inputmode="decimal" required value="200000" />
+          <label>Inlet total pressure P₀
+            <span class="input-with-unit">
+              <input type="text" name="Pt_in" inputmode="decimal" required value="200000" />
+              <select id="unit-in-Pt_in" class="unit-input-sel" data-group="pressure" data-field="Pt_in"><option>(loading...)</option></select>
+            </span>
           </label>
-          <label>Inlet total temperature T₀ [K]
-            <input type="text" name="Tt_in" inputmode="decimal" required value="400" />
+          <label>Inlet total temperature T₀
+            <span class="input-with-unit">
+              <input type="text" name="Tt_in" inputmode="decimal" required value="400" />
+              <select id="unit-in-Tt_in" class="unit-input-sel" data-group="temperature" data-field="Tt_in"><option>(loading...)</option></select>
+            </span>
           </label>
-          <label>Outlet static pressure P₂ [Pa]
-            <input type="text" name="Ps_out" inputmode="decimal" required value="101325" />
+          <label>Outlet static pressure P₂
+            <span class="input-with-unit">
+              <input type="text" name="Ps_out" inputmode="decimal" required value="101325" />
+              <select id="unit-in-Ps_out" class="unit-input-sel" data-group="pressure" data-field="Ps_out"><option>(loading...)</option></select>
+            </span>
           </label>
         </fieldset>
 
@@ -94,24 +106,39 @@
                 <label class="inline-radio"><input type="radio" name="input_basis" value="mass_flow_based" /><span>Mass-flow-based</span></label>
               </div>
             </fieldset>
-            <label id="liquid-jet-diameter-label">Liquid-jet diameter [m]
-              <input id="liquid-jet-diameter-input" type="text" name="liquid_jet_diameter" inputmode="decimal" placeholder="e.g. 0.001" />
+            <label id="liquid-jet-diameter-label">Liquid-jet diameter
+              <span class="input-with-unit">
+                <input id="liquid-jet-diameter-input" type="text" name="liquid_jet_diameter" inputmode="decimal" placeholder="e.g. 0.001" />
+                <select id="unit-in-liquid_jet_diameter" class="unit-input-sel" data-group="diameter" data-field="liquid_jet_diameter"><option>(loading...)</option></select>
+              </span>
             </label>
             <label id="liquid-mass-flow-label">Liquid mass flow rate [kg/s]
               <input id="liquid-mass-flow-input" type="text" name="liquid_mass_flow_rate" inputmode="decimal" placeholder="e.g. 0.05" />
             </label>
-            <label>Liquid velocity [m/s]
-              <input id="liquid-velocity-input" type="text" name="liquid_velocity" inputmode="decimal" placeholder="e.g. 50" />
+            <label>Liquid velocity
+              <span class="input-with-unit">
+                <input id="liquid-velocity-input" type="text" name="liquid_velocity" inputmode="decimal" placeholder="e.g. 50" />
+                <select id="unit-in-liquid_velocity" class="unit-input-sel" data-group="velocity" data-field="liquid_velocity"><option>(loading...)</option></select>
+              </span>
             </label>
-            <label>Liquid density [kg/m³]
-              <input id="liquid-density-input" type="text" name="liquid_density" inputmode="decimal" placeholder="e.g. 998.2" />
+            <label>Liquid density
+              <span class="input-with-unit">
+                <input id="liquid-density-input" type="text" name="liquid_density" inputmode="decimal" placeholder="e.g. 998.2" />
+                <select id="unit-in-liquid_density" class="unit-input-sel" data-group="density" data-field="liquid_density"><option>(loading...)</option></select>
+              </span>
             </label>
             <div id="liquid-jet-calc-note" class="calc-note hidden"></div>
-            <label>Liquid viscosity [Pa·s]
-              <input type="text" name="liquid_viscosity" inputmode="decimal" placeholder="e.g. 1.0e-3" value="1.002e-3" />
+            <label>Liquid viscosity
+              <span class="input-with-unit">
+                <input type="text" name="liquid_viscosity" inputmode="decimal" placeholder="e.g. 1.0e-3" value="1.002e-3" />
+                <select id="unit-in-liquid_viscosity" class="unit-input-sel" data-group="viscosity" data-field="liquid_viscosity"><option>(loading...)</option></select>
+              </span>
             </label>
-            <label>Surface tension [N/m]
-              <input type="text" name="surface_tension" inputmode="decimal" placeholder="e.g. 0.072" value="0.072" />
+            <label>Surface tension
+              <span class="input-with-unit">
+                <input type="text" name="surface_tension" inputmode="decimal" placeholder="e.g. 0.072" value="0.072" />
+                <select id="unit-in-surface_tension" class="unit-input-sel" data-group="surface_tension" data-field="surface_tension"><option>(loading...)</option></select>
+              </span>
             </label>
             <label>Primary breakup model
               <select name="primary_breakup_model">
@@ -119,7 +146,10 @@
               </select>
             </label>
             <label>Primary breakup coefficient
-              <input type="text" name="primary_breakup_coefficient" inputmode="decimal" placeholder="e.g. 10" value="10" />
+              <span class="input-with-unit">
+                <input type="text" name="primary_breakup_coefficient" inputmode="decimal" placeholder="e.g. 10" value="10" />
+                <select id="unit-in-primary_breakup_coefficient" class="unit-input-sel" data-group="dimensionless" data-field="primary_breakup_coefficient"><option>(loading...)</option></select>
+              </span>
             </label>
             <label>Initial SMD model
               <select name="initial_SMD_model">
@@ -128,8 +158,11 @@
             </label>
           </div>
           <div id="droplet-initial-conditions-section">
-            <label id="droplet-velocity-row">Initial droplet velocity [m/s]
-              <input type="text" name="droplet_velocity_in" inputmode="decimal" required value="10" />
+            <label id="droplet-velocity-row">Initial droplet velocity
+              <span class="input-with-unit">
+                <input type="text" name="droplet_velocity_in" inputmode="decimal" required value="10" />
+                <select id="unit-in-droplet_velocity_in" class="unit-input-sel" data-group="velocity" data-field="droplet_velocity_in"><option>(loading...)</option></select>
+              </span>
             </label>
           </div>
           <div id="water-mass-flow-section">
@@ -140,22 +173,34 @@
               </select>
             </label>
             <div id="water-mass-flow-kgps-row">
-              <label>Water mass flow rate [kg/s]
-                <input type="text" name="water_mass_flow_rate" inputmode="decimal" placeholder="e.g. 0.05" />
+              <label>Water mass flow rate
+                <span class="input-with-unit">
+                  <input type="text" name="water_mass_flow_rate" inputmode="decimal" placeholder="e.g. 0.05" />
+                  <select id="unit-in-water_mass_flow_rate" class="unit-input-sel" data-group="mass_flow" data-field="water_mass_flow_rate"><option>(loading...)</option></select>
+                </span>
               </label>
             </div>
             <div id="water-mass-flow-percent-row" class="hidden">
-              <label>Water mass flow ratio [% of gas]
-                <input type="text" name="water_mass_flow_rate_percent" inputmode="decimal" placeholder="e.g. 5" />
+              <label>Water mass flow ratio
+                <span class="input-with-unit">
+                  <input type="text" name="water_mass_flow_rate_percent" inputmode="decimal" placeholder="e.g. 5" />
+                  <select id="unit-in-water_mass_flow_rate_percent" class="unit-input-sel" data-group="dimensionless" data-field="water_mass_flow_rate_percent"><option>(loading...)</option></select>
+                </span>
               </label>
             </div>
           </div>
           <div id="droplet-size-section">
-            <label>Mean droplet diameter [m]
-              <input type="text" name="droplet_diameter_mean_in" inputmode="decimal" required value="0.00005" />
+            <label>Mean droplet diameter
+              <span class="input-with-unit">
+                <input type="text" name="droplet_diameter_mean_in" inputmode="decimal" required value="0.00005" />
+                <select id="unit-in-droplet_diameter_mean_in" class="unit-input-sel" data-group="diameter" data-field="droplet_diameter_mean_in"><option>(loading...)</option></select>
+              </span>
             </label>
-            <label>Maximum droplet diameter [m]
-              <input type="text" name="droplet_diameter_max_in" inputmode="decimal" required value="0.0001" />
+            <label>Maximum droplet diameter
+              <span class="input-with-unit">
+                <input type="text" name="droplet_diameter_max_in" inputmode="decimal" required value="0.0001" />
+                <select id="unit-in-droplet_diameter_max_in" class="unit-input-sel" data-group="diameter" data-field="droplet_diameter_max_in"><option>(loading...)</option></select>
+              </span>
             </label>
           </div>
         </fieldset>
@@ -187,46 +232,82 @@
           </div>
           <div id="breakup-critical-weber-row">
             <label>Critical Weber number
-              <input type="text" name="critical_weber_number" inputmode="decimal" value="12" />
+              <span class="input-with-unit">
+                <input type="text" name="critical_weber_number" inputmode="decimal" value="12" />
+                <select id="unit-in-critical_weber_number" class="unit-input-sel" data-group="dimensionless" data-field="critical_weber_number"><option>(loading...)</option></select>
+              </span>
             </label>
           </div>
-          <div id="breakup-params-weber">
+            <div id="breakup-params-weber">
             <label>Breakup factor — mean diameter
-              <input type="text" name="breakup_factor_mean" inputmode="decimal" value="0.5" />
+              <span class="input-with-unit">
+                <input type="text" name="breakup_factor_mean" inputmode="decimal" value="0.5" />
+                <select id="unit-in-breakup_factor_mean" class="unit-input-sel" data-group="dimensionless" data-field="breakup_factor_mean"><option>(loading...)</option></select>
+              </span>
             </label>
             <label>Breakup factor — maximum diameter
-              <input type="text" name="breakup_factor_max" inputmode="decimal" value="0.5" />
+              <span class="input-with-unit">
+                <input type="text" name="breakup_factor_max" inputmode="decimal" value="0.5" />
+                <select id="unit-in-breakup_factor_max" class="unit-input-sel" data-group="dimensionless" data-field="breakup_factor_max"><option>(loading...)</option></select>
+              </span>
             </label>
           </div>
           <div id="breakup-params-khrt" class="hidden">
             <label>KH wavelength coefficient B₀
-              <input type="text" name="khrt_B0" inputmode="decimal" value="0.61" />
+              <span class="input-with-unit">
+                <input type="text" name="khrt_B0" inputmode="decimal" value="0.61" />
+                <select id="unit-in-khrt_B0" class="unit-input-sel" data-group="dimensionless" data-field="khrt_B0"><option>(loading...)</option></select>
+              </span>
             </label>
             <label>KH breakup time coefficient B₁
-              <input type="text" name="khrt_B1" inputmode="decimal" value="40.0" />
+              <span class="input-with-unit">
+                <input type="text" name="khrt_B1" inputmode="decimal" value="40.0" />
+                <select id="unit-in-khrt_B1" class="unit-input-sel" data-group="dimensionless" data-field="khrt_B1"><option>(loading...)</option></select>
+              </span>
             </label>
             <label>RT wavelength coefficient C<sub>RT</sub>
-              <input type="text" name="khrt_Crt" inputmode="decimal" value="0.1" />
+              <span class="input-with-unit">
+                <input type="text" name="khrt_Crt" inputmode="decimal" value="0.1" />
+                <select id="unit-in-khrt_Crt" class="unit-input-sel" data-group="dimensionless" data-field="khrt_Crt"><option>(loading...)</option></select>
+              </span>
             </label>
             <label>Liquid density [kg/m³]
-              <input type="text" name="khrt_liquid_density" inputmode="decimal" value="998.2" />
+              <span class="input-with-unit">
+                <input type="text" name="khrt_liquid_density" inputmode="decimal" value="998.2" />
+                <select id="unit-in-khrt_liquid_density" class="unit-input-sel" data-group="density" data-field="khrt_liquid_density"><option>(loading...)</option></select>
+              </span>
             </label>
-            <label>Liquid viscosity [Pa·s]
-              <input type="text" name="khrt_liquid_viscosity" inputmode="decimal" value="1.002e-3" />
+            <label>Liquid viscosity
+              <span class="input-with-unit">
+                <input type="text" name="khrt_liquid_viscosity" inputmode="decimal" value="1.002e-3" />
+                <select id="unit-in-khrt_liquid_viscosity" class="unit-input-sel" data-group="viscosity" data-field="khrt_liquid_viscosity"><option>(loading...)</option></select>
+              </span>
             </label>
           </div>
           <div id="breakup-params-tab" class="hidden">
             <label>TAB reduction fraction
-              <input type="text" name="tab_reduction_fraction" inputmode="decimal" value="0.5" />
+              <span class="input-with-unit">
+                <input type="text" name="tab_reduction_fraction" inputmode="decimal" value="0.5" />
+                <select id="unit-in-tab_reduction_fraction" class="unit-input-sel" data-group="dimensionless" data-field="tab_reduction_fraction"><option>(loading...)</option></select>
+              </span>
             </label>
             <label>TAB spring constant (k)
-              <input type="text" name="tab_spring_k" inputmode="decimal" value="0.001" />
+              <span class="input-with-unit">
+                <input type="text" name="tab_spring_k" inputmode="decimal" value="0.001" />
+                <select id="unit-in-tab_spring_k" class="unit-input-sel" data-group="spring_constant" data-field="tab_spring_k"><option>(loading...)</option></select>
+              </span>
             </label>
             <label>TAB damping (c)
-              <input type="text" name="tab_damping_c" inputmode="decimal" value="1e-6" />
+              <span class="input-with-unit">
+                <input type="text" name="tab_damping_c" inputmode="decimal" value="1e-6" />
+                <select id="unit-in-tab_damping_c" class="unit-input-sel" data-group="damping" data-field="tab_damping_c"><option>(loading...)</option></select>
+              </span>
             </label>
             <label>TAB breakup threshold
-              <input type="text" name="tab_breakup_threshold" inputmode="decimal" value="1.0" />
+              <span class="input-with-unit">
+                <input type="text" name="tab_breakup_threshold" inputmode="decimal" value="1.0" />
+                <select id="unit-in-tab_breakup_threshold" class="unit-input-sel" data-group="dimensionless" data-field="tab_breakup_threshold"><option>(loading...)</option></select>
+              </span>
             </label>
           </div>
         </fieldset>
@@ -244,11 +325,17 @@
       <form id="grid-form">
         <fieldset>
           <legend>Axial Domain</legend>
-          <label>x start [m]
-            <input type="number" name="x_start" step="0.001" value="0" required />
+          <label>x start
+            <span class="input-with-unit">
+              <input type="number" name="x_start" step="0.001" value="0" required />
+              <select id="unit-in-x_start" class="unit-input-sel" data-group="length" data-field="x_start"><option>(loading...)</option></select>
+            </span>
           </label>
-          <label>x end [m]
-            <input type="number" name="x_end" step="0.001" value="0.1" required />
+          <label>x end
+            <span class="input-with-unit">
+              <input type="number" name="x_end" step="0.001" value="0.1" required />
+              <select id="unit-in-x_end" class="unit-input-sel" data-group="length" data-field="x_end"><option>(loading...)</option></select>
+            </span>
           </label>
           <label>Number of cells
             <input type="number" name="n_cells" step="1" min="2" value="100" required />
