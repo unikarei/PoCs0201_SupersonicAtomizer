@@ -28,6 +28,7 @@ def create_app() -> FastAPI:
     from supersonic_atomizer.gui.routers.index_router import router as index_r
     from supersonic_atomizer.gui.routers.simulation_router import router as sim_r
     from supersonic_atomizer.gui.routers.units_router import router as units_r
+    from supersonic_atomizer.gui.routers.debug_router import router as debug_r
 
     application = FastAPI(
         title="Supersonic Atomizer GUI",
@@ -46,6 +47,7 @@ def create_app() -> FastAPI:
     application.include_router(chat_r, prefix="/api/chat", tags=["chat"])
     application.include_router(sim_r, prefix="/api/simulation", tags=["simulation"])
     application.include_router(units_r, prefix="/api/units", tags=["units"])
+    application.include_router(debug_r, prefix="/api/debug", tags=["debug"])
 
     return application
 

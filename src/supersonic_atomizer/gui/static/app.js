@@ -81,6 +81,9 @@ const INPUT_FIELD_UNIT_GROUP = {
   // and dimensionless numbers) are not converted.
 };
 
+// Client-side cache mapping "project/case" -> last_result payload
+let caseResultCache = new Map();
+
 /**
  * Convert a single SI value to the given display unit.
  * Formula: display = si * scale + offset
@@ -951,11 +954,60 @@ async function selectCase(projectName, name) {
   try {
     const cfg = await cfgPromise;
     if (cfg) {
-      populateConditionsForm(cfg);
-      populateGridForm(cfg);
+      // Use a defensive wrapper to avoid a single field error preventing UI population
+      await tryPopulateCaseConfig(cfg);
     }
   } catch (e) {
     console.warn("Failed to populate case forms:", e);
+  }
+}
+
+
+async function tryPopulateCaseConfig(cfg) {
+  try {
+    populateConditionsForm(cfg);
+  } catch (err) {
+    console.error("populateConditionsForm failed:", err);
+    // Send debug log to server for diagnosis
+    try {
+      await fetch('/api/debug/log', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: 'populateConditionsForm failure', details: String(err) }),
+      });
+    } catch (e) {
+      // ignore
+    }
+    // Best-effort: populate only boundary conditions and fluid to avoid blanks
+    try {
+      const bc = cfg.boundary_conditions || {};
+      const fl = cfg.fluid || {};
+      const f = document.getElementById('conditions-form');
+      if (f) {
+        setFieldValue(f, 'Pt_in', convertSiStringToDisplay(String(bc.Pt_in ?? ''), 'pressure', getInputUnitLabel('Pt_in') || 'Pa'));
+        setFieldValue(f, 'Tt_in', convertSiStringToDisplay(String(bc.Tt_in ?? ''), 'temperature', getInputUnitLabel('Tt_in') || 'K'));
+        setFieldValue(f, 'Ps_out', convertSiStringToDisplay(String(bc.Ps_out ?? ''), 'pressure', getInputUnitLabel('Ps_out') || 'Pa'));
+        setFieldValue(f, 'working_fluid', fl.working_fluid || 'air');
+      }
+    } catch (e2) {
+      // swallow secondary errors
+      console.error('fallback population failed', e2);
+    }
+  }
+
+  try {
+    populateGridForm(cfg);
+  } catch (err) {
+    console.error('populateGridForm failed:', err);
+    try {
+      await fetch('/api/debug/log', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: 'populateGridForm failure', details: String(err) }),
+      });
+    } catch (e) {
+      // ignore
+    }
   }
 }
 
