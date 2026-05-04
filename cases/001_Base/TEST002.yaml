@@ -35,7 +35,8 @@ droplet_injection:
   primary_breakup_model: empirical
   primary_breakup_coefficient: null
   initial_SMD_model: fraction_of_jet
-  water_mass_flow_rate_percent: null
+  water_mass_flow_rate_percent: 200
+  water_mass_flow_rate: null
 models:
   breakup_model: weber_critical
   critical_weber_number: 12

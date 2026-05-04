@@ -2447,34 +2447,7 @@ async function loadUnitGroups() {
     // Store specs for client-side conversion
     unitGroupSpecs = groups;
 
-    // ── Settings tab selectors ───────────────────────────────────────────
-    const container = document.getElementById("unit-group-controls");
-    if (!container) {
-      console.error("unit-group-controls container not found!");
-      return;
-    }
-    container.innerHTML = "";
-    Object.entries(groups).forEach(([group, options]) => {
-      const row = document.createElement("div");
-      row.className = "unit-group-row";
-      const label = document.createElement("label");
-      label.textContent = group;
-      const sel = document.createElement("select");
-      sel.id = "unit-sel-" + group;
-      sel.dataset.group = group;
-      const optionLabels = Object.keys(options);
-      console.log(`Group '${group}' options:`, optionLabels);
-      optionLabels.forEach(opt => {
-        const option = document.createElement("option");
-        option.value = opt;
-        option.textContent = opt;
-        if (opt === current[group]) option.selected = true;
-        sel.appendChild(option);
-      });
-      row.appendChild(label);
-      row.appendChild(sel);
-      container.appendChild(row);
-    });
+    // Settings tab removed — unit-group controls are provided via Graph dialog
 
     // ── Inline input-field unit selectors ────────────────────────────────
     const selectors = document.querySelectorAll(".unit-input-sel");
@@ -2534,20 +2507,159 @@ async function loadUnitGroups() {
   }
 }
 
-document.getElementById("btn-save-units").addEventListener("click", async () => {
-  const updates = {};
-  document.querySelectorAll("[id^='unit-sel-']").forEach(sel => {
-    updates[sel.dataset.group] = sel.value;
+// Small transient toast for user feedback
+function showToast(message, timeout = 2500) {
+  try {
+    const toast = document.createElement("div");
+    toast.className = "temp-toast";
+    toast.textContent = message;
+    toast.style.position = "fixed";
+    toast.style.right = "16px";
+    toast.style.bottom = "16px";
+    toast.style.background = "#222";
+    toast.style.color = "#fff";
+    toast.style.padding = "8px 12px";
+    toast.style.borderRadius = "6px";
+    toast.style.boxShadow = "0 2px 8px rgba(0,0,0,0.3)";
+    toast.style.zIndex = 2000;
+    document.body.appendChild(toast);
+    setTimeout(() => { toast.style.opacity = "0"; }, timeout - 400);
+    setTimeout(() => { try { document.body.removeChild(toast); } catch (_e) {} }, timeout);
+  } catch (e) {
+    console.warn("showToast failed", e);
+  }
+}
+
+const btnSaveUnits = document.getElementById("btn-save-units");
+if (btnSaveUnits) {
+  btnSaveUnits.addEventListener("click", async () => {
+    const updates = {};
+    document.querySelectorAll("[id^='unit-sel-']").forEach(sel => {
+      updates[sel.dataset.group] = sel.value;
+    });
+    const statusEl = document.getElementById("units-status");
+    try {
+      await apiFetch("/api/units/preferences", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updates),
+      });
+      if (statusEl) {
+        statusEl.textContent = "✓ Units applied (re-run to update plots)";
+        setTimeout(() => { statusEl.textContent = ""; }, 3000);
+      }
+    } catch (e) {
+      if (statusEl) statusEl.textContent = "Error: " + e.message;
+    }
   });
-  const statusEl = document.getElementById("units-status");
+}
+
+// ── Graph settings dialog and per-unit Apply handlers ────────────────────
+async function openGraphSettingsDialog() {
+  try {
+    const groups = unitGroupSpecs || await apiFetch("/api/units/groups");
+    const current = await apiFetch("/api/units/preferences");
+    const container = document.getElementById("graph-unit-group-controls");
+    if (!container) return;
+    container.innerHTML = "";
+    Object.entries(groups).forEach(([group, options]) => {
+      const row = document.createElement("div");
+      row.className = "unit-group-row";
+      const label = document.createElement("label");
+      label.textContent = group;
+      const sel = document.createElement("select");
+      sel.dataset.group = group;
+      Object.keys(options).forEach(opt => {
+        const o = document.createElement("option");
+        o.value = opt;
+        o.textContent = opt;
+        if (opt === current[group]) o.selected = true;
+        sel.appendChild(o);
+      });
+      const applyBtn = document.createElement("button");
+      applyBtn.type = "button";
+      applyBtn.className = "mini-apply-btn";
+      applyBtn.textContent = "Apply";
+      applyBtn.addEventListener("click", async () => {
+        const statusEl = document.getElementById("graph-units-status");
+        try {
+          const payload = {};
+          payload[group] = sel.value;
+          await apiFetch("/api/units/preferences", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+          statusEl.textContent = "✓ Units applied, updating plots...";
+          // Reload last_result for active case to regenerate plots with new units
+          if (activeProjectName && activeCaseName) {
+            const last = await apiFetch(`${projectCaseUrl(activeProjectName, activeCaseName)}/last_result`);
+            plotData = last.plots || {};
+            const fields = last.plot_fields || Object.keys(plotData);
+            renderPlots(fields);
+            renderTable(last.table_rows || []);
+          }
+          statusEl.textContent = "✓ Units applied";
+          // Close dialog and show success toast
+          try { dialog.close(); } catch (_e) { dialog.classList.add("hidden"); }
+          showToast("Units applied");
+          setTimeout(() => { statusEl.textContent = ""; }, 2500);
+        } catch (e) {
+          statusEl.textContent = "Error: " + e.message;
+        }
+      });
+      row.appendChild(label);
+      row.appendChild(sel);
+      row.appendChild(applyBtn);
+      container.appendChild(row);
+    });
+    const dialog = document.getElementById("graph-settings-dialog");
+    if (!dialog) return;
+    if (typeof dialog.showModal === "function") {
+      dialog.showModal();
+    } else {
+      dialog.classList.remove("hidden");
+    }
+  } catch (e) {
+    console.error("openGraphSettingsDialog failed", e);
+  }
+}
+
+document.getElementById("graphs-settings-btn").addEventListener("click", async () => {
+  await openGraphSettingsDialog();
+});
+
+document.getElementById("graph-settings-close").addEventListener("click", () => {
+  const dialog = document.getElementById("graph-settings-dialog");
+  if (!dialog) return;
+  try { dialog.close(); } catch (_e) { dialog.classList.add("hidden"); }
+});
+
+document.getElementById("graph-settings-apply-all").addEventListener("click", async () => {
+  const statusEl = document.getElementById("graph-units-status");
+  const container = document.getElementById("graph-unit-group-controls");
+  if (!container) return;
+  const updates = {};
+  container.querySelectorAll("select").forEach(sel => { updates[sel.dataset.group] = sel.value; });
   try {
     await apiFetch("/api/units/preferences", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(updates),
     });
-    statusEl.textContent = "✓ Units applied (re-run to update plots)";
-    setTimeout(() => { statusEl.textContent = ""; }, 3000);
+    statusEl.textContent = "✓ Units applied, updating plots...";
+    if (activeProjectName && activeCaseName) {
+      const last = await apiFetch(`${projectCaseUrl(activeProjectName, activeCaseName)}/last_result`);
+      plotData = last.plots || {};
+      const fields = last.plot_fields || Object.keys(plotData);
+      renderPlots(fields);
+      renderTable(last.table_rows || []);
+    }
+    statusEl.textContent = "✓ Units applied";
+    // Close dialog and show success toast
+    try { document.getElementById("graph-settings-dialog")?.close(); } catch (_e) { document.getElementById("graph-settings-dialog")?.classList.add("hidden"); }
+    showToast("Units applied");
+    setTimeout(() => { statusEl.textContent = ""; }, 2500);
   } catch (e) {
     statusEl.textContent = "Error: " + e.message;
   }

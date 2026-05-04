@@ -36,7 +36,7 @@
       <button class="tab-btn" data-tab="post-graphs">📈 Graphs</button>
       <button class="tab-btn" data-tab="post-table">📊 Table</button>
       <button class="tab-btn" data-tab="post-report">📝 Report</button>
-      <button class="tab-btn" data-tab="settings">⚙ Settings</button>
+      
     </nav>
 
     <!-- ── Pre Tab 1: Analysis Conditions ──────────────────────────────────── -->
@@ -384,7 +384,10 @@
 
     <!-- ── Post Tab 1: Graphs ───────────────────────────────────────────────── -->
     <section id="tab-post-graphs" class="tab-content hidden">
-      <h3>Axial Profiles</h3>
+      <div class="tab-header" style="display:flex;align-items:center;justify-content:space-between;">
+        <h3 style="margin:0">Axial Profiles</h3>
+        <button type="button" id="graphs-settings-btn" class="icon-btn" title="Graph settings">⚙</button>
+      </div>
       <div id="plot-controls">
         <strong>Select quantities:</strong>
         <div id="plot-checkboxes" class="plot-checkboxes"></div>
@@ -415,18 +418,7 @@
       </div>
     </section>
 
-    <!-- ── Settings Tab ─────────────────────────────────────────────────────── -->
-    <section id="tab-settings" class="tab-content hidden">
-      <h3>Display Units</h3>
-      <p>All solver inputs and internal computations remain in SI units. These settings affect display only.</p>
-      <form id="units-form">
-        <div id="unit-group-controls"></div>
-        <div class="form-actions">
-          <button type="button" id="btn-save-units">💾 Apply units</button>
-          <span id="units-status" class="status-msg"></span>
-        </div>
-      </form>
-    </section>
+    <!-- Settings tab removed; settings available via Graphs ⚙ dialog -->
 
   </main>
 
@@ -533,6 +525,24 @@
         </ul>
         <p><em>用途: 高速噴霧での液柱・液滴の1次/2次破砕を物理的に表現したいとき。</em></p>
       </section>
+    </div>
+  </div>
+</dialog>
+
+<!-- ── Graph Settings Dialog ───────────────────────────────────────────── -->
+<dialog id="graph-settings-dialog" class="help-dialog" aria-labelledby="graph-settings-title">
+  <div class="help-dialog-box">
+    <div class="modal-header">
+      <h3 id="graph-settings-title">Graph Settings (Display Units)</h3>
+      <button type="button" id="graph-settings-close" class="modal-close-btn" aria-label="Close">✕</button>
+    </div>
+    <div class="modal-body">
+      <p>Change display units for plots. Use the per-unit <strong>Apply</strong> button to update plots immediately.</p>
+      <div id="graph-unit-group-controls"></div>
+      <div class="form-actions">
+        <button type="button" id="graph-settings-apply-all">💾 Apply all</button>
+        <span id="graph-units-status" class="status-msg"></span>
+      </div>
     </div>
   </div>
 </dialog>
