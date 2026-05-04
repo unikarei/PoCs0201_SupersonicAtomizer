@@ -234,6 +234,7 @@ function clamp(value, minValue, maxValue) {
 
 function formatPlotFieldLabel(field) {
   if (field === "area_profile") return "Area Profile";
+  if (field === "pressure") return "Static Pressure";
   return String(field).replace(/_/g, " ");
 }
 
@@ -891,41 +892,90 @@ async function selectCase(projectName, name) {
   expandedProjects.add(projectName);
   updateActiveCaseLabel();
   renderProjectCaseTree();
-  // Load the case config into the forms
-  try {
-    const cfg = await apiFetch(projectCaseUrl(projectName, name));
-    populateConditionsForm(cfg);
-    populateGridForm(cfg);
-    // Try to load the most recent completed simulation result for this case
+  // Optimise responsiveness: show cached result immediately if available and
+  // fetch the latest result in the background. Load case config concurrently.
+  const caseRef = `${projectName}/${name}`;
+
+  // If we have a cached result for this case, render it immediately.
+  if (caseResultCache.has(caseRef)) {
+    const cached = caseResultCache.get(caseRef);
+    applyLastResultToUI(cached, caseRef);
+  } else {
+    // No cache: clear post-tab content and show loading placeholders so UI responds fast.
+    plotData = {};
+    tableRows = [];
+    csvContent = "";
+    lastPlotFields = [];
+    lastRunCount = 0;
+    lastDiagnostics = null;
+    renderPlots([]);
+    renderTable([]);
+    renderReport();
+    const dlBtn = document.getElementById("btn-download-csv");
+    if (dlBtn) dlBtn.disabled = true;
+  }
+
+  // Start fetching case config and last_result concurrently.
+  // Try project-scoped case load first; fall back to legacy flat-case endpoint
+  const cfgPromise = (async () => {
     try {
-      const last = await apiFetch(`${projectCaseUrl(projectName, name)}/last_result`);
-      plotData = last.plots || {};
-      tableRows = last.table_rows || [];
-      csvContent = last.csv || "";
-      const fields = last.plot_fields || Object.keys(plotData);
-      lastPlotFields = fields;
-      lastRunCount = last.run_count || 1;
-      lastDiagnostics = last.diagnostics || null;
-      renderPlots(fields);
-      renderTable(tableRows);
-      renderReport();
-      document.getElementById("btn-download-csv").disabled = !csvContent;
-    } catch (_e) {
-      // No previous result for this case — clear any existing post-tab content
-      plotData = {};
-      tableRows = [];
-      csvContent = "";
-      lastPlotFields = [];
-      lastRunCount = 0;
-      lastDiagnostics = null;
-      renderPlots([]);
-      renderTable([]);
-      renderReport();
-      document.getElementById("btn-download-csv").disabled = true;
+      return await apiFetch(projectCaseUrl(projectName, name));
+    } catch (e) {
+      console.debug(`Project-scoped config not found for ${projectName}/${name}, trying legacy path.`);
+    }
+    try {
+      return await apiFetch(`/api/cases/${encodeURIComponent(name)}`);
+    } catch (e) {
+      console.warn("Failed to load case config from both project and legacy endpoints:", e);
+      return null;
+    }
+  })();
+
+  (async () => {
+    try {
+      // When the Graph tab is active prefer file-backed artifacts for instant render
+      const preferFiles = document.querySelector('#tab-graphs') && !document.querySelector('#tab-graphs').classList.contains('hidden') ? '1' : '0';
+      const last = await apiFetch(`${projectCaseUrl(projectName, name)}/last_result?prefer_files=${preferFiles}`);
+      if (last) {
+        // Cache and apply to UI (may overwrite earlier cached render)
+        caseResultCache.set(caseRef, last);
+        applyLastResultToUI(last, caseRef);
+      }
+    } catch (e) {
+      // No result or error: leave placeholders in place and log the issue.
+      console.debug(`No last_result for ${caseRef}:`, e && e.message ? e.message : e);
+    }
+  })();
+
+  // Await config separately so forms are populated when available.
+  try {
+    const cfg = await cfgPromise;
+    if (cfg) {
+      populateConditionsForm(cfg);
+      populateGridForm(cfg);
     }
   } catch (e) {
-    console.warn("Failed to load case config:", e);
+    console.warn("Failed to populate case forms:", e);
   }
+}
+
+
+/**
+ * Apply a last_result payload to global UI state and render
+ */
+function applyLastResultToUI(last, caseRef) {
+  plotData = last.plots || {};
+  tableRows = last.table_rows || [];
+  csvContent = last.csv || "";
+  const fields = last.plot_fields || Object.keys(plotData);
+  lastPlotFields = fields;
+  lastRunCount = last.run_count || 1;
+  lastDiagnostics = last.diagnostics || null;
+  renderPlots(fields);
+  renderTable(tableRows);
+  renderReport();
+  const dlBtn = document.getElementById("btn-download-csv");
+  if (dlBtn) dlBtn.disabled = !csvContent;
 }
 
 async function createProject(projectName) {
@@ -2331,7 +2381,8 @@ function renderTable(rows) {
   const trHead = document.createElement("tr");
   headers.forEach(h => {
     const th = document.createElement("th");
-    th.textContent = h;
+    // Display 'pressure' as 'Static pressure' in table headers
+    th.textContent = (h === "pressure") ? "Static pressure" : h;
     trHead.appendChild(th);
   });
   thead.appendChild(trHead);

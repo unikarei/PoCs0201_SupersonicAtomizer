@@ -4,7 +4,7 @@ from __future__ import annotations
 
 
 PLOT_LABELS: dict[str, tuple[str, str]] = {
-	"pressure": ("Pressure", "pressure [Pa]"),
+	"pressure": ("Static Pressure", "static pressure [Pa]"),
 	"temperature": ("Temperature", "temperature [K]"),
 	"working_fluid_velocity": ("Working Fluid Velocity", "velocity [m/s]"),
 	"droplet_velocity": ("Droplet Velocity", "velocity [m/s]"),

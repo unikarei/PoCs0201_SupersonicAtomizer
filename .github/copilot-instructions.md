@@ -308,3 +308,25 @@ When assisting in this repository, GitHub Copilot should:
 - avoid speculative or large-scale code generation.
 
 If unsure, choose the smallest change that preserves the architecture and advances the current approved task.
+
+---
+
+## Utility scripts
+
+This repository includes lightweight helper scripts that may be useful to run after completing small, reviewable tasks.
+
+- `scripts/commit_after_task.sh` — POSIX shell script that stages all changes and runs `git commit -m "<message>"`. Usage:
+
+```bash
+./scripts/commit_after_task.sh "Short commit message describing the task"
+```
+
+- `scripts/commit_after_task.bat` — Windows batch variant. Usage:
+
+```bat
+scripts\commit_after_task.bat "Short commit message describing the task"
+```
+
+Both scripts default to the message "Automated commit after task completion" when no message argument is supplied.
+
+Note: these helpers simply run `git add -A` followed by `git commit -m`. Use them for small, self-contained commits only — prefer PRs and feature branches for larger changes.

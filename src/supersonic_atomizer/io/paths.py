@@ -27,14 +27,19 @@ def _generate_run_id() -> str:
 	return datetime.now(UTC).strftime("run-%Y%m%dT%H%M%SZ")
 
 
-def build_output_metadata(*, output_config: OutputConfig, run_id: str | None = None) -> OutputMetadata:
+def build_output_metadata(*, output_config: OutputConfig, run_id: str | None = None, project: str | None = None, case_name: str | None = None) -> OutputMetadata:
 	"""Build structured artifact metadata following the approved conventions."""
 
 	resolved_run_id = run_id or _generate_run_id()
 	if not resolved_run_id.strip():
 		raise OutputError("Output metadata requires a non-empty run identifier.")
 
-	run_directory = Path(output_config.output_directory) / resolved_run_id
+	# Prefer organizing outputs under project/case when provided to mirror cases/ layout
+	base = Path(output_config.output_directory)
+	if project and case_name:
+		run_directory = base / project / case_name / resolved_run_id
+	else:
+		run_directory = base / resolved_run_id
 	plot_paths = {
 		plot_name: str(run_directory / "plots" / filename)
 		for plot_name, filename in PLOT_FILENAMES.items()
@@ -62,3 +67,39 @@ def ensure_output_directories(output_metadata: OutputMetadata) -> None:
 			Path(next(iter(output_metadata.plot_paths.values()))).parent.mkdir(parents=True, exist_ok=True)
 	except OSError as exc:
 		raise OutputError(f"Failed to create output directories for '{output_metadata.output_directory}': {exc}") from exc
+
+
+def prune_old_output_runs(output_metadata: OutputMetadata) -> None:
+	"""Remove older run directories leaving only the current run directory.
+
+	This function looks at the parent directory containing per-run subdirectories
+	and removes siblings that match the run- prefix except for the active run.
+	Be conservative: only remove directories whose names start with "run-".
+	"""
+	try:
+		current = Path(output_metadata.output_directory)
+		parent = current.parent
+		if not parent.is_dir():
+			return
+		for child in parent.iterdir():
+			if child == current:
+				continue
+			if child.is_dir() and child.name.startswith("run-"):
+				# remove directory tree
+				for sub in child.rglob("*"):
+					if sub.is_file():
+						sub.unlink()
+					for sub in reversed(list(child.rglob("*"))):
+						try:
+							if sub.is_dir():
+								sub.rmdir()
+						except OSError:
+							pass
+				try:
+					child.rmdir()
+				except OSError:
+					# best-effort cleanup; ignore failures
+					pass
+	except OSError:
+		# Do not raise in cleanup — it's non-critical
+		pass

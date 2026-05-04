@@ -1,9 +1,9 @@
 fluid:
-  working_fluid: air
-  inlet_wetness: null
+  working_fluid: steam
+  inlet_wetness: 0
 boundary_conditions:
   Pt_in: 300000
-  Tt_in: 320
+  Tt_in: 520
   Ps_out: 24000
 droplet_injection:
   droplet_velocity_in: 10
@@ -13,14 +13,16 @@ droplet_injection:
   liquid_jet_diameter: null
   liquid_mass_flow_rate: null
   liquid_velocity: null
-  liquid_density: null
-  liquid_viscosity: null
+  liquid_density: 998.2
+  liquid_viscosity: 0.001002
   surface_tension: null
   primary_breakup_model: empirical
   primary_breakup_coefficient: null
   initial_SMD_model: fraction_of_jet
   water_mass_flow_rate: null
-  water_mass_flow_rate_percent: 300
+  water_mass_flow_rate_percent: 1000000
+  input_basis: diameter_based
+  liquid_material: water
 models:
   breakup_model: weber_critical
   critical_weber_number: 12
@@ -30,8 +32,8 @@ models:
   khrt_B0: 0.61
   khrt_B1: 40
   khrt_Crt: 0.1
-  liquid_density: null
-  liquid_viscosity: null
+  liquid_density: 998.2
+  liquid_viscosity: 0.001002
   tab_reduction_fraction: 0.5
   tab_spring_k: 0.001
   tab_damping_c: 1.0e-06

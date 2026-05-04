@@ -516,8 +516,24 @@ class ApplicationService:
 					startup_dependencies,
 					breakup_model,
 				)
+			# Derive project and case name from the case_path to produce a
+			# Project/Case/run-id outputs layout when possible.
+			project: str | None = None
+			case_name: str | None = None
+			try:
+				p = Path(case_path)
+				case_name = p.stem
+				parent = p.parent
+				if parent.name and parent.name != "cases":
+					project = parent.name
+			except Exception:
+				project = None
+
 			output_metadata = self.output_metadata_builder(
 				output_config=startup_dependencies.case_config.outputs,
+				run_id=None,
+				project=project,
+				case_name=case_name,
 			)
 			self.output_directory_initializer(output_metadata)
 			simulation_result = self.result_assembler(
@@ -536,6 +552,15 @@ class ApplicationService:
 					self.json_writer(simulation_result)
 				if simulation_result.output_metadata.generate_plots:
 					self.plot_generator(simulation_result)
+				# Prune older runs leaving only this run's directory to satisfy
+				# the "latest-only" retention policy.
+				from supersonic_atomizer.io.paths import prune_old_output_runs
+				try:
+					if simulation_result.output_metadata and simulation_result.output_metadata.output_directory:
+						prune_old_output_runs(simulation_result.output_metadata)
+				except Exception:
+					# best-effort cleanup; do not fail the run for cleanup errors
+					pass
 
 			return SimulationRunResult(
 				status="completed",

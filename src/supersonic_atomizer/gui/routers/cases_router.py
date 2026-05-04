@@ -25,6 +25,8 @@ from supersonic_atomizer.gui.multi_run import MultiRunSimulationResult
 from supersonic_atomizer.gui.pages.post_graphs import extract_overlay_plot_series, extract_plot_series
 from supersonic_atomizer.gui.pages.post_table import aggregate_result_to_table_rows, generate_csv_content, result_to_table_rows
 from supersonic_atomizer.gui.plot_utils import figure_to_base64
+import base64
+from pathlib import Path
 import matplotlib
 import matplotlib.pyplot as plt
 
@@ -319,21 +321,53 @@ async def get_last_result_for_project_case(project: str, name: str, state: GUISt
         if run_result is None or run_result.simulation_result is None:
             raise HTTPException(status_code=409, detail="Simulation result is not available.")
         sim_result = run_result.simulation_result
-        series = extract_plot_series(sim_result, prefs)
-        for field, data in series.items():
-            fig, ax = plt.subplots(figsize=(6, 3))
-            ax.plot(data["x"], data["y"])
-            ax.set_xlabel(data["x_label"])
-            ax.set_ylabel(data["ylabel"])
-            ax.set_title(data["title"])
-            ax.grid(True, alpha=0.3)
-            plt.tight_layout()
-            plots[field] = figure_to_base64(fig)
-            plt.close(fig)
+        # Prefer file-backed plot images if the run wrote artifacts to disk.
+        metadata = sim_result.output_metadata
+        if metadata and metadata.plot_paths:
+            for field, path_str in metadata.plot_paths.items():
+                p = Path(path_str)
+                if p.is_file():
+                    with p.open("rb") as fh:
+                        plots[field] = base64.b64encode(fh.read()).decode("ascii")
+                else:
+                    # fallback to in-memory generation for missing files
+                    data = extract_plot_series(sim_result, prefs).get(field)
+                    if data is None:
+                        continue
+                    fig, ax = plt.subplots(figsize=(6, 3))
+                    ax.plot(data["x"], data["y"])
+                    ax.set_xlabel(data["x_label"])
+                    ax.set_ylabel(data["ylabel"])
+                    ax.set_title(data["title"])
+                    ax.grid(True, alpha=0.3)
+                    plt.tight_layout()
+                    plots[field] = figure_to_base64(fig)
+                    plt.close(fig)
+        else:
+            series = extract_plot_series(sim_result, prefs)
+            for field, data in series.items():
+                fig, ax = plt.subplots(figsize=(6, 3))
+                ax.plot(data["x"], data["y"])
+                ax.set_xlabel(data["x_label"])
+                ax.set_ylabel(data["ylabel"])
+                ax.set_title(data["title"])
+                ax.grid(True, alpha=0.3)
+                plt.tight_layout()
+                plots[field] = figure_to_base64(fig)
+                plt.close(fig)
         table_rows = result_to_table_rows(sim_result, prefs)
         plot_fields = list(series.keys())
 
+    # Prefer reading CSV from disk when available
     csv_content = generate_csv_content(table_rows)
+    try:
+        if 'sim_result' in locals() and sim_result.output_metadata and sim_result.output_metadata.csv_path:
+            csv_path = Path(sim_result.output_metadata.csv_path)
+            if csv_path.is_file():
+                csv_content = csv_path.read_text(encoding='utf-8')
+    except Exception:
+        # fallback to generated CSV on any error
+        pass
 
     return {
         "status": record.status,

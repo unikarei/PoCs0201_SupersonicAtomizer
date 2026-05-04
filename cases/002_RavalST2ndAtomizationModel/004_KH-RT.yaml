@@ -3,7 +3,7 @@ fluid:
   inlet_wetness: 0
 boundary_conditions:
   Pt_in: 300000
-  Tt_in: 540
+  Tt_in: 520
   Ps_out:
   - 264547.5
   - 226105.55
@@ -36,7 +36,7 @@ droplet_injection:
   droplet_velocity_in: 10
   droplet_diameter_mean_in: 5.0e-05
   droplet_diameter_max_in: 0.0001
-  water_mass_flow_rate_percent: 20000
+  water_mass_flow_rate_percent: 10000
   water_mass_flow_rate: null
   injection_mode: droplet_injection
   liquid_jet_diameter: 100
@@ -64,7 +64,7 @@ outputs:
   generate_plots: true
 models:
   coupling_mode: one_way
-  breakup_model: khrt
+  breakup_model: weber_critical
   critical_weber_number: 12
   breakup_factor_mean: 0.5
   breakup_factor_max: 0.5

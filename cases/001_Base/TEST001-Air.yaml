@@ -2,30 +2,14 @@ fluid:
   working_fluid: air
   inlet_wetness: null
 boundary_conditions:
-  Pt_in: 180000
-  Tt_in: 400
-  Ps_out: 101325
-geometry:
-  x_start: 0
-  x_end: 0.1
-  n_cells: 100
-  area_distribution:
-    type: table
-    x:
-    - 0
-    - 0.05
-    - 0.1
-    A:
-    - 0.0001
-    - 6.0e-05
-    - 5.0e-05
+  Pt_in: 300000
+  Tt_in: 520
+  Ps_out: 24000
 droplet_injection:
   droplet_velocity_in: 10
   droplet_diameter_mean_in: 5.0e-05
   droplet_diameter_max_in: 0.0001
   injection_mode: droplet_injection
-  input_basis: diameter_based
-  liquid_material: water
   liquid_jet_diameter: null
   liquid_mass_flow_rate: null
   liquid_velocity: null
@@ -35,8 +19,10 @@ droplet_injection:
   primary_breakup_model: empirical
   primary_breakup_coefficient: null
   initial_SMD_model: fraction_of_jet
-  water_mass_flow_rate_percent: 200
   water_mass_flow_rate: null
+  water_mass_flow_rate_percent: 1000000
+  input_basis: diameter_based
+  liquid_material: water
 models:
   breakup_model: weber_critical
   critical_weber_number: 12
@@ -52,8 +38,24 @@ models:
   tab_spring_k: 0.001
   tab_damping_c: 1.0e-06
   tab_breakup_threshold: 1
+geometry:
+  x_start: 0
+  x_end: 0.3
+  n_cells: 100
+  area_distribution:
+    type: table
+    x:
+    - 0
+    - 0.05
+    - 0.15
+    - 0.3
+    A:
+    - 0.00013398
+    - 0.0001
+    - 0.00016735
+    - 0.00016735
 outputs:
-  output_directory: outputs
+  output_directory: outputs/TEST001
   write_csv: true
   write_json: true
   generate_plots: true
