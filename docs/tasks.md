@@ -1428,3 +1428,22 @@ Phase 34 is done when the FastAPI GUI shows `x` vs `Area Profile` in both the Gr
   - **Purpose:** Protect the new graph ordering, grid figure presence, chat API contract, and right-panel markup while preserving prior GUI behavior.
   - **Dependencies:** P34-T02, P34-T03, P34-T05.
   - **Completion criteria:** FastAPI and GUI regression tests cover the new structural/API behavior and the targeted regression suites pass.
+
+- [ ] **P34-T07 — Add "チャット" / "要約" tab split inside the chat conversation area**
+  - **Purpose:** Allow users to switch between the chat dialogue view and an on-demand summary view within the right-side chat panel, without leaving the active case context.
+  - **Dependencies:** P34-T05.
+  - **Scope:**
+    - Two tabs inside `.chat-conversation`: "チャット" (existing conversation) and "要約" (summary).
+    - Summary tab: configurable max-char selector (options 150 / 300 / 500 / 1000, default 300); a "Generate" button that calls `POST /api/chat/summary`; displays the returned summary text; a refine prompt input at the bottom that calls the same endpoint with additional user instruction appended to the system prompt.
+    - Backend: `POST /api/chat/summary` endpoint that accepts `{project_name, case_name, thread_id, max_chars, refine_prompt?}` and returns `{summary: str}`.
+    - Schema: `ChatSummaryRequest` and `ChatSummaryResponse` added to `schemas.py`.
+    - Tests: `test_generate_summary_returns_text` covering the happy path.
+  - **Completion criteria:** Tabs render correctly; summary is generated and displayed on demand; char count selector changes the generation target; refine prompt updates the displayed summary.
+
+- [ ] **P34-T08 — Fix chat inner-tab regression: form visibility, tab switching, tab styling**
+  - **Purpose:** Repair three regressions introduced in P34-T07: (1) the chat input form disappeared because `flex-shrink: 0` was missing on `.chat-form` inside the new tab-content wrapper; (2) tab switching did not work because CSS class-based `hidden` toggling conflicted with the global `.hidden` rule; (3) the chat inner tabs did not match the Project Explorer tab visual style.
+  - **Dependencies:** P34-T07.
+  - **Scope:**
+    - CSS: Add `flex-shrink: 0` to `.chat-form`. Add `overflow: hidden` to `.chat-inner-tab-content`. Redesign `.chat-inner-tab-bar` and `.chat-inner-tab-btn` to use the same pill/rounded-rectangle style as the existing `.tab-bar` / `.tab-btn` (dark strip background, light inactive tabs, white active tab with bold label).
+    - JS: Replace `classList.toggle("hidden")` in `switchChatInnerTab` with direct `style.display` assignment to eliminate CSS specificity conflicts. Add `type="button"` to the tab buttons in the HTML for defensive correctness.
+  - **Completion criteria:** Chat input form is always visible in the チャット tab; clicking 要約 tab shows the summary panel and hides the chat messages; both inner tabs visually match the Project Explorer tab style.

@@ -30,6 +30,8 @@ let draggedCaseRef = null;
 let sidebarResizeState = null;
 let rightSidebarResizeState = null;
 const caseChatHistories = new Map();
+const caseChatThreads = new Map();
+let activeChatThreadId = null;
 let chatVoiceRecognition = null;
 let chatVoiceListening = false;
 const MIN_LEFT_PANEL_WIDTH = 180;
@@ -349,14 +351,171 @@ function getActiveCaseRef() {
 
 function getCaseChatHistory() {
   const caseRef = getActiveCaseRef();
-  if (!caseRef) return [];
-  return caseChatHistories.get(caseRef) || [];
+  if (!caseRef || !activeChatThreadId) return [];
+  return caseChatHistories.get(`${caseRef}::${activeChatThreadId}`) || [];
 }
 
 function setCaseChatHistory(messages) {
   const caseRef = getActiveCaseRef();
+  if (!caseRef || !activeChatThreadId) return;
+  caseChatHistories.set(`${caseRef}::${activeChatThreadId}`, messages);
+}
+
+function getCaseThreadList() {
+  const caseRef = getActiveCaseRef();
+  if (!caseRef) return [];
+  return caseChatThreads.get(caseRef) || [];
+}
+
+function setCaseThreadList(threads) {
+  const caseRef = getActiveCaseRef();
   if (!caseRef) return;
-  caseChatHistories.set(caseRef, messages);
+  caseChatThreads.set(caseRef, Array.isArray(threads) ? threads : []);
+}
+
+function renderChatThreadList() {
+  const container = document.getElementById("chat-thread-list");
+  if (!container) return;
+  container.innerHTML = "";
+
+  if (!activeCaseName) {
+    container.innerHTML = '<div class="chat-thread-empty">Select a case to see chat history.</div>';
+    return;
+  }
+
+  const threads = getCaseThreadList();
+  if (threads.length === 0) {
+    container.innerHTML = '<div class="chat-thread-empty">No chat history yet.</div>';
+    return;
+  }
+
+  threads.forEach(thread => {
+    const row = document.createElement("div");
+    row.className = `chat-thread-item ${thread.id === activeChatThreadId ? "active" : ""}`;
+    row.title = thread.title || "Chat";
+    row.addEventListener("click", async () => {
+      activeChatThreadId = thread.id;
+      await loadActiveThreadHistory();
+      updateChatPanelState();
+    });
+
+    const title = document.createElement("div");
+    title.className = "chat-thread-title";
+    title.textContent = thread.title || "New chat";
+    row.appendChild(title);
+
+    const renameBtn = document.createElement("button");
+    renameBtn.type = "button";
+    renameBtn.className = "chat-thread-meta-btn";
+    renameBtn.title = "Rename";
+    renameBtn.textContent = "✎";
+    renameBtn.addEventListener("click", async event => {
+      event.stopPropagation();
+      const nextTitle = window.prompt("Rename chat", thread.title || "");
+      if (!nextTitle) return;
+      try {
+        await apiFetch(`/api/chat/threads/${encodeURIComponent(thread.id)}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            project_name: getActiveProjectName(),
+            case_name: activeCaseName,
+            title: nextTitle,
+          }),
+        });
+        await loadChatThreadsForActiveCase({ keepCurrent: true });
+      } catch (error) {
+        setChatStatus(`Rename failed: ${error.message}`, true);
+      }
+    });
+    row.appendChild(renameBtn);
+
+    const deleteBtn = document.createElement("button");
+    deleteBtn.type = "button";
+    deleteBtn.className = "chat-thread-meta-btn";
+    deleteBtn.title = "Delete";
+    deleteBtn.textContent = "🗑";
+    deleteBtn.addEventListener("click", async event => {
+      event.stopPropagation();
+      if (!window.confirm("Delete this chat history?")) return;
+      try {
+        await apiFetch(
+          `/api/chat/threads/${encodeURIComponent(thread.id)}?project_name=${encodeURIComponent(getActiveProjectName())}&case_name=${encodeURIComponent(activeCaseName)}`,
+          { method: "DELETE" },
+        );
+        const caseRef = getActiveCaseRef();
+        if (caseRef) {
+          caseChatHistories.delete(`${caseRef}::${thread.id}`);
+        }
+        if (activeChatThreadId === thread.id) {
+          activeChatThreadId = null;
+        }
+        await loadChatThreadsForActiveCase({ keepCurrent: false });
+      } catch (error) {
+        setChatStatus(`Delete failed: ${error.message}`, true);
+      }
+    });
+    row.appendChild(deleteBtn);
+
+    container.appendChild(row);
+  });
+}
+
+async function loadActiveThreadHistory() {
+  if (!activeCaseName || !activeChatThreadId) return;
+  const caseRef = getActiveCaseRef();
+  if (!caseRef) return;
+  const cacheKey = `${caseRef}::${activeChatThreadId}`;
+  if (caseChatHistories.has(cacheKey)) return;
+
+  const detail = await apiFetch(
+    `/api/chat/threads/${encodeURIComponent(activeChatThreadId)}?project_name=${encodeURIComponent(getActiveProjectName())}&case_name=${encodeURIComponent(activeCaseName)}`,
+  );
+  caseChatHistories.set(cacheKey, detail.messages || []);
+}
+
+async function loadChatThreadsForActiveCase({ keepCurrent = true } = {}) {
+  if (!activeCaseName) {
+    activeChatThreadId = null;
+    renderChatThreadList();
+    renderChatHistory();
+    return;
+  }
+
+  const payload = await apiFetch(
+    `/api/chat/threads?project_name=${encodeURIComponent(getActiveProjectName())}&case_name=${encodeURIComponent(activeCaseName)}`,
+  );
+  setCaseThreadList(payload.threads || []);
+  const threads = getCaseThreadList();
+
+  const stillExists = keepCurrent && activeChatThreadId && threads.some(thread => thread.id === activeChatThreadId);
+  if (!stillExists) {
+    activeChatThreadId = threads.length > 0 ? threads[0].id : null;
+  }
+
+  if (activeChatThreadId) {
+    await loadActiveThreadHistory();
+  }
+  renderChatThreadList();
+  renderChatHistory();
+}
+
+async function createNewChatThread(initialTitle = "New chat") {
+  if (!activeCaseName) return;
+  const created = await apiFetch("/api/chat/threads", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      project_name: getActiveProjectName(),
+      case_name: activeCaseName,
+      title: initialTitle,
+    }),
+  });
+  activeChatThreadId = created.id;
+  setCaseThreadList([created, ...getCaseThreadList().filter(thread => thread.id !== created.id)]);
+  setCaseChatHistory(created.messages || []);
+  renderChatThreadList();
+  renderChatHistory();
 }
 
 function setChatStatus(message, isError = false) {
@@ -373,6 +532,11 @@ function renderChatHistory() {
 
   if (!activeCaseName) {
     container.innerHTML = '<div class="chat-empty">Select a case to discuss it with the assistant.</div>';
+    return;
+  }
+
+  if (!activeChatThreadId) {
+    container.innerHTML = '<div class="chat-empty">Create a new chat or select history from the left panel.</div>';
     return;
   }
 
@@ -400,6 +564,7 @@ function updateChatPanelState() {
   const sendButton = document.getElementById("btn-send-chat");
   const voiceButton = document.getElementById("btn-chat-voice");
   const clearButton = document.getElementById("btn-clear-chat");
+  const newThreadButton = document.getElementById("btn-new-chat-thread");
   const hasCase = Boolean(activeCaseName);
 
   if (caseLabel) {
@@ -409,8 +574,10 @@ function updateChatPanelState() {
   }
   if (input) input.disabled = !hasCase;
   if (sendButton) sendButton.disabled = !hasCase;
-  if (clearButton) clearButton.disabled = !hasCase;
+  if (clearButton) clearButton.disabled = !hasCase || !activeChatThreadId;
+  if (newThreadButton) newThreadButton.disabled = !hasCase;
   if (voiceButton) voiceButton.disabled = !hasCase || !chatVoiceRecognition;
+  renderChatThreadList();
   renderChatHistory();
 }
 
@@ -426,6 +593,10 @@ async function submitChatMessage() {
   if (!input) return;
   const text = input.value.trim();
   if (!text) return;
+
+  if (!activeChatThreadId) {
+    await createNewChatThread(text.slice(0, 48));
+  }
 
   const history = getCaseChatHistory();
   const userMessage = { role: "user", content: text };
@@ -445,10 +616,15 @@ async function submitChatMessage() {
       body: JSON.stringify({
         project_name: getActiveProjectName(),
         case_name: activeCaseName,
+        thread_id: activeChatThreadId,
         messages: normalizeChatMessagesForApi([...history, userMessage]),
       }),
     });
+    if (response.thread_id) {
+      activeChatThreadId = response.thread_id;
+    }
     setCaseChatHistory([...history, userMessage, response.reply]);
+    await loadChatThreadsForActiveCase({ keepCurrent: true });
     setChatStatus("");
   } catch (error) {
     setCaseChatHistory([...history, userMessage, { role: "system", content: error.message }]);
@@ -457,12 +633,114 @@ async function submitChatMessage() {
   renderChatHistory();
 }
 
-function clearActiveCaseChat() {
+async function clearActiveCaseChat() {
   const caseRef = getActiveCaseRef();
-  if (!caseRef) return;
-  caseChatHistories.delete(caseRef);
+  if (!caseRef || !activeChatThreadId) return;
+  caseChatHistories.set(`${caseRef}::${activeChatThreadId}`, []);
+  try {
+    await apiFetch(`/api/chat/threads/${encodeURIComponent(activeChatThreadId)}/messages`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        project_name: getActiveProjectName(),
+        case_name: activeCaseName,
+        messages: [],
+      }),
+    });
+    await loadChatThreadsForActiveCase({ keepCurrent: true });
+  } catch (error) {
+    setChatStatus(`Clear failed: ${error.message}`, true);
+  }
   setChatStatus("");
   renderChatHistory();
+}
+
+// ── Chat inner tab (チャット / 要約) ────────────────────────────────────────
+
+function switchChatInnerTab(tabName) {
+  document.querySelectorAll(".chat-inner-tab-btn").forEach(btn => {
+    const isActive = btn.dataset.innerTab === tabName;
+    btn.classList.toggle("active", isActive);
+    btn.setAttribute("aria-selected", String(isActive));
+  });
+  document.querySelectorAll(".chat-inner-tab-content").forEach(pane => {
+    const show = pane.id === `chat-inner-tab-${tabName}`;
+    pane.style.display = show ? "flex" : "none";
+  });
+}
+
+function setSummaryStatus(text, isError = false) {
+  const el = document.getElementById("summary-status");
+  if (!el) return;
+  el.textContent = text;
+  el.classList.toggle("error", isError);
+}
+
+async function generateSummary(refinePrompt = null) {
+  if (!activeCaseName || !activeChatThreadId) {
+    setSummaryStatus("ケースとチャットスレッドを選択してください。", true);
+    return;
+  }
+  const maxCharsEl = document.getElementById("summary-max-chars");
+  const maxChars = maxCharsEl ? parseInt(maxCharsEl.value, 10) : 300;
+  const displayEl = document.getElementById("summary-display");
+  if (displayEl) displayEl.innerHTML = "<p class='summary-loading'>生成中...</p>";
+  setSummaryStatus("要約を生成中...");
+
+  try {
+    const headers = { "Content-Type": "application/json" };
+    const llmSel = document.getElementById("chat-llm-sel");
+    if (llmSel && llmSel.value) headers["X-LLM-MODEL"] = llmSel.value;
+    const payload = {
+      project_name: getActiveProjectName(),
+      case_name: activeCaseName,
+      thread_id: activeChatThreadId,
+      max_chars: maxChars,
+    };
+    if (refinePrompt) payload.refine_prompt = refinePrompt;
+    const response = await apiFetch("/api/chat/summary", {
+      method: "POST",
+      headers,
+      body: JSON.stringify(payload),
+    });
+    const summaryText = (response && response.summary) ? response.summary : "";
+    if (displayEl) {
+      if (summaryText) {
+        displayEl.textContent = summaryText;
+      } else {
+        displayEl.innerHTML = "<p class='summary-empty'>要約が返されませんでした。</p>";
+      }
+    }
+    setSummaryStatus("");
+  } catch (error) {
+    if (displayEl) displayEl.innerHTML = `<p class='summary-error'>エラー: ${error.message}</p>`;
+    setSummaryStatus(`要約の生成に失敗しました: ${error.message}`, true);
+  }
+}
+
+function initializeSummaryTab() {
+  // Set initial display states via style.display (avoids CSS class specificity conflicts).
+  switchChatInnerTab("conversation");
+
+  document.querySelectorAll(".chat-inner-tab-btn").forEach(btn => {
+    btn.addEventListener("click", () => switchChatInnerTab(btn.dataset.innerTab));
+  });
+
+  const genBtn = document.getElementById("btn-generate-summary");
+  if (genBtn) {
+    genBtn.addEventListener("click", () => void generateSummary());
+  }
+
+  const refineForm = document.getElementById("summary-refine-form");
+  if (refineForm) {
+    refineForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const refineInput = document.getElementById("summary-refine-input");
+      const refineText = refineInput ? refineInput.value.trim() : "";
+      await generateSummary(refineText || null);
+      if (refineInput) refineInput.value = "";
+    });
+  }
 }
 
 function initializeChatVoiceInput() {
@@ -892,9 +1170,15 @@ async function loadCaseList(projectName = getActiveProjectName()) {
 async function selectCase(projectName, name) {
   activeProjectName = projectName;
   activeCaseName = name;
+  activeChatThreadId = null;
   expandedProjects.add(projectName);
   updateActiveCaseLabel();
   renderProjectCaseTree();
+  try {
+    await loadChatThreadsForActiveCase({ keepCurrent: false });
+  } catch (error) {
+    setChatStatus(`Failed loading chat history: ${error.message}`, true);
+  }
   // Optimise responsiveness: show cached result immediately if available and
   // fetch the latest result in the background. Load case config concurrently.
   const caseRef = `${projectName}/${name}`;
@@ -918,7 +1202,7 @@ async function selectCase(projectName, name) {
     if (dlBtn) dlBtn.disabled = true;
   }
 
-  // Start fetching case config and last_result concurrently.
+  // Start fetching case config.
   // Try project-scoped case load first; fall back to legacy flat-case endpoint
   const cfgPromise = (async () => {
     try {
@@ -933,29 +1217,31 @@ async function selectCase(projectName, name) {
       return null;
     }
   })();
-
-  (async () => {
-    try {
-      // When the Graph tab is active prefer file-backed artifacts for instant render
-      const preferFiles = document.querySelector('#tab-graphs') && !document.querySelector('#tab-graphs').classList.contains('hidden') ? '1' : '0';
-      const last = await apiFetch(`${projectCaseUrl(projectName, name)}/last_result?prefer_files=${preferFiles}`);
-      if (last) {
-        // Cache and apply to UI (may overwrite earlier cached render)
-        caseResultCache.set(caseRef, last);
-        applyLastResultToUI(last, caseRef);
-      }
-    } catch (e) {
-      // No result or error: leave placeholders in place and log the issue.
-      console.debug(`No last_result for ${caseRef}:`, e && e.message ? e.message : e);
-    }
-  })();
-
-  // Await config separately so forms are populated when available.
+  // Await config so forms are populated when available. After config load
+  // we may fetch last_result only when the server indicates one exists.
   try {
     const cfg = await cfgPromise;
     if (cfg) {
-      // Use a defensive wrapper to avoid a single field error preventing UI population
       await tryPopulateCaseConfig(cfg);
+    }
+
+    // If we already have a cached result, we rendered it earlier. Otherwise
+    // only request /last_result when the server indicates a run exists
+    // (avoid noisy 404s for fresh cases with no runs).
+    if (!caseResultCache.has(caseRef)) {
+      const hasResult = cfg && cfg.has_result;
+      if (hasResult) {
+        try {
+          const preferFiles = document.querySelector('#tab-graphs') && !document.querySelector('#tab-graphs').classList.contains('hidden') ? '1' : '0';
+          const last = await apiFetch(`${projectCaseUrl(projectName, name)}/last_result?prefer_files=${preferFiles}`);
+          if (last) {
+            caseResultCache.set(caseRef, last);
+            applyLastResultToUI(last, caseRef);
+          }
+        } catch (e) {
+          console.debug(`Failed fetching last_result for ${caseRef}:`, e && e.message ? e.message : e);
+        }
+      }
     }
   } catch (e) {
     console.warn("Failed to populate case forms:", e);
@@ -2583,7 +2869,16 @@ document.getElementById("chat-form").addEventListener("submit", async event => {
 });
 
 document.getElementById("btn-clear-chat").addEventListener("click", () => {
-  clearActiveCaseChat();
+  void clearActiveCaseChat();
+});
+
+document.getElementById("btn-new-chat-thread").addEventListener("click", async () => {
+  try {
+    await createNewChatThread("New chat");
+    updateChatPanelState();
+  } catch (error) {
+    setChatStatus(`Failed creating chat: ${error.message}`, true);
+  }
 });
 
 document.getElementById("chat-input").addEventListener("keydown", async event => {
@@ -2829,6 +3124,7 @@ async function init() {
   initializeSidebarResizeHandle();
   initializeRightSidebarResizeHandle();
   initializeChatVoiceInput();
+  initializeSummaryTab();
   console.log("About to loadProjectList...");
   await loadProjectList();
   console.log("About to loadUnitGroups...");

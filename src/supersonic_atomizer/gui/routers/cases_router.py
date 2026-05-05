@@ -185,7 +185,11 @@ async def get_project_case(project: str, name: str) -> dict[str, Any]:
     """Return the stored config dict for a project-scoped case."""
     store = _get_store()
     try:
-        return store.load(name, project=project)
+        cfg = store.load(name, project=project)
+        # Indicate whether a completed run exists for this project/case so
+        # the client can avoid unnecessary /last_result requests that yield 404.
+        has_result = get_job_store().latest_completed_for_case(_case_ref(project, name)) is not None
+        return {**cfg, "has_result": has_result}
     except ProjectNameError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except CaseNotFoundError as exc:
@@ -403,7 +407,9 @@ async def get_case(name: str) -> dict[str, Any]:
     """Return the stored config dict for *name*."""
     store = _get_store()
     try:
-        return store.load(name)
+        cfg = store.load(name)
+        has_result = get_job_store().latest_completed_for_case(name) is not None
+        return {**cfg, "has_result": has_result}
     except CaseNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 

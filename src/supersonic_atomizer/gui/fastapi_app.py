@@ -13,6 +13,11 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
+from dotenv import load_dotenv
+import os
+from urllib import request as _urlrequest, error as _urlerror
+import json as _json
+import logging as _logging
 
 _GUI_DIR = Path(__file__).parent
 
@@ -54,4 +59,55 @@ def create_app() -> FastAPI:
 
 # Module-level singleton consumed by uvicorn:
 #   uv run uvicorn supersonic_atomizer.gui.fastapi_app:app --reload
+try:
+    # Prefer a project-root .env file for local development. This does not
+    # overwrite existing environment variables so system/user-level values
+    # remain authoritative.
+    project_root = Path(__file__).resolve().parents[2]
+    dotenv_path = project_root / ".env"
+    if dotenv_path.exists():
+        load_dotenv(dotenv_path=str(dotenv_path), override=False)
+    # Optional: validate OPENAI_API_KEY by querying the provider models endpoint.
+    # Controlled by OPENAI_VALIDATE_ON_START env var (set to '1' or 'true' to enable).
+    try:
+        validate_on_start = str(os.environ.get("OPENAI_VALIDATE_ON_START", "1")).lower() in ("1", "true", "yes")
+    except Exception:
+        validate_on_start = True
+    if validate_on_start:
+        api_key = os.environ.get("OPENAI_API_KEY", "").strip()
+        if api_key:
+            try:
+                _logging.getLogger("supersonic_atomizer").info("Validating OPENAI_API_KEY with provider...")
+                base_url = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1").rstrip("/")
+                req = _urlrequest.Request(
+                    url=f"{base_url}/models",
+                    method="GET",
+                    headers={"Authorization": f"Bearer {api_key}"},
+                )
+                with _urlrequest.urlopen(req, timeout=6) as resp:
+                    # If we get a usable JSON body, consider the key valid.
+                    try:
+                        _json.load(resp)
+                        _logging.getLogger("supersonic_atomizer").info("OPENAI_API_KEY appears valid.")
+                    except Exception:
+                        _logging.getLogger("supersonic_atomizer").info("OPENAI_API_KEY validated (no parse error).")
+            except _urlerror.HTTPError as exc:
+                detail = exc.read().decode("utf-8", errors="replace") if hasattr(exc, "read") else str(exc)
+                if exc.code == 401:
+                    _logging.getLogger("supersonic_atomizer").warning(
+                        "OPENAI API key appears invalid (HTTP 401). Chat features will return an error. "
+                        "Check OPENAI_API_KEY or create a project .env from .env.example."
+                    )
+                else:
+                    _logging.getLogger("supersonic_atomizer").warning(
+                        f"OPENAI API key validation failed with HTTP {exc.code}: {detail[:200]}"
+                    )
+            except Exception as exc:  # network/timeout/etc
+                _logging.getLogger("supersonic_atomizer").warning(
+                    f"Could not validate OPENAI_API_KEY at startup: {exc}. Proceeding without blocking."
+                )
+except Exception:
+    # Don't prevent the app from starting if dotenv is unavailable.
+    pass
+
 app = create_app()

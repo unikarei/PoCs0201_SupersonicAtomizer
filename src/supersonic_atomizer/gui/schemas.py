@@ -58,7 +58,60 @@ class ChatRequest(BaseModel):
     case_name: str
     project_name: str | None = None
     messages: list[ChatMessage]
+    thread_id: str | None = None
 
 
 class ChatReplyResponse(BaseModel):
     reply: ChatMessage
+    thread_id: str | None = None
+    thread_title: str | None = None
+
+
+class ChatThreadSummary(BaseModel):
+    id: str
+    title: str
+    created_at: str
+    updated_at: str
+    message_count: int
+
+
+class ChatThreadDetail(BaseModel):
+    id: str
+    title: str
+    created_at: str
+    updated_at: str
+    messages: list[ChatMessage]
+
+
+class ChatThreadListResponse(BaseModel):
+    threads: list[ChatThreadSummary]
+
+
+class ChatThreadCreateRequest(BaseModel):
+    case_name: str
+    project_name: str | None = None
+    title: str | None = None
+
+
+class ChatThreadRenameRequest(BaseModel):
+    case_name: str
+    project_name: str | None = None
+    title: str
+
+
+class ChatThreadMessagesUpdateRequest(BaseModel):
+    case_name: str
+    project_name: str | None = None
+    messages: list[ChatMessage]
+
+
+class ChatSummaryRequest(BaseModel):
+    case_name: str
+    project_name: str | None = None
+    thread_id: str
+    max_chars: int = 300
+    refine_prompt: str | None = None
+
+
+class ChatSummaryResponse(BaseModel):
+    summary: str

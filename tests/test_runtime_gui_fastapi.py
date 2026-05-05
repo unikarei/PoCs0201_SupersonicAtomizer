@@ -559,8 +559,12 @@ class TestSimulationEndpoints:
 
 class TestChatEndpoints:
 
-    def test_send_chat_message_returns_reply(self, client, monkeypatch):
+    def test_send_chat_message_returns_reply(self, client, monkeypatch, tmp_path):
         from supersonic_atomizer.gui.routers import chat_router
+        from supersonic_atomizer.gui.chat_history_store import ChatHistoryStore
+
+        history_store = ChatHistoryStore(root_dir=tmp_path / "chat_histories_reply")
+        monkeypatch.setattr(chat_router, "_chat_history_store", history_store)
 
         client.post("/api/cases/projects/", json={"name": "chat_proj"})
         client.post("/api/cases/projects/chat_proj/cases/", json={"name": "chat_case"})
@@ -580,7 +584,64 @@ class TestChatEndpoints:
 
         assert resp.status_code == 200
         assert resp.json()["reply"] == {"role": "assistant", "content": "Case looks stable."}
+        assert resp.json().get("thread_id")
         mock_service.generate_reply.assert_called_once()
+
+    def test_chat_threads_crud_and_persistence(self, client, monkeypatch, tmp_path):
+        from supersonic_atomizer.gui.routers import chat_router
+        from supersonic_atomizer.gui.chat_history_store import ChatHistoryStore
+
+        history_store = ChatHistoryStore(root_dir=tmp_path / "chat_histories")
+        monkeypatch.setattr(chat_router, "_chat_history_store", history_store)
+
+        client.post("/api/cases/projects/", json={"name": "chat_proj_crud"})
+        client.post("/api/cases/projects/chat_proj_crud/cases/", json={"name": "chat_case_crud"})
+
+        create_resp = client.post(
+            "/api/chat/threads",
+            json={
+                "project_name": "chat_proj_crud",
+                "case_name": "chat_case_crud",
+                "title": "Initial thread",
+            },
+        )
+        assert create_resp.status_code == 201
+        thread_id = create_resp.json()["id"]
+
+        list_resp = client.get("/api/chat/threads", params={"project_name": "chat_proj_crud", "case_name": "chat_case_crud"})
+        assert list_resp.status_code == 200
+        assert any(t["id"] == thread_id for t in list_resp.json()["threads"])
+
+        rename_resp = client.patch(
+            f"/api/chat/threads/{thread_id}",
+            json={
+                "project_name": "chat_proj_crud",
+                "case_name": "chat_case_crud",
+                "title": "Renamed thread",
+            },
+        )
+        assert rename_resp.status_code == 200
+        assert rename_resp.json()["title"] == "Renamed thread"
+
+        replace_resp = client.put(
+            f"/api/chat/threads/{thread_id}/messages",
+            json={
+                "project_name": "chat_proj_crud",
+                "case_name": "chat_case_crud",
+                "messages": [
+                    {"role": "user", "content": "hello"},
+                    {"role": "assistant", "content": "world"},
+                ],
+            },
+        )
+        assert replace_resp.status_code == 200
+        assert len(replace_resp.json()["messages"]) == 2
+
+        delete_resp = client.delete(
+            f"/api/chat/threads/{thread_id}",
+            params={"project_name": "chat_proj_crud", "case_name": "chat_case_crud"},
+        )
+        assert delete_resp.status_code == 204
 
     def test_send_chat_message_missing_case_returns_404(self, client):
         resp = client.post(
@@ -591,6 +652,101 @@ class TestChatEndpoints:
             },
         )
         assert resp.status_code == 404
+
+    def test_generate_summary_returns_text(self, client, monkeypatch, tmp_path):
+        from supersonic_atomizer.gui.routers import chat_router
+        from supersonic_atomizer.gui.chat_history_store import ChatHistoryStore
+
+        history_store = ChatHistoryStore(root_dir=tmp_path / "chat_histories_summary")
+        monkeypatch.setattr(chat_router, "_chat_history_store", history_store)
+
+        client.post("/api/cases/projects/", json={"name": "sum_proj"})
+        client.post("/api/cases/projects/sum_proj/cases/", json={"name": "sum_case"})
+
+        # Create a thread and populate it with some messages.
+        thread_resp = client.post(
+            "/api/chat/threads",
+            json={"project_name": "sum_proj", "case_name": "sum_case", "title": "Summary test"},
+        )
+        assert thread_resp.status_code == 201
+        thread_id = thread_resp.json()["id"]
+
+        client.put(
+            f"/api/chat/threads/{thread_id}/messages",
+            json={
+                "project_name": "sum_proj",
+                "case_name": "sum_case",
+                "messages": [
+                    {"role": "user", "content": "What is the Mach number at exit?"},
+                    {"role": "assistant", "content": "The Mach number at exit is approximately 1.74."},
+                ],
+            },
+        )
+
+        mock_service = MagicMock()
+        mock_service.generate_reply.return_value = "Exit Mach ~1.74, supersonic flow."
+        monkeypatch.setattr(chat_router, "_chat_service", mock_service)
+
+        resp = client.post(
+            "/api/chat/summary",
+            json={
+                "project_name": "sum_proj",
+                "case_name": "sum_case",
+                "thread_id": thread_id,
+                "max_chars": 300,
+            },
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "summary" in data
+        assert isinstance(data["summary"], str)
+        assert len(data["summary"]) > 0
+        mock_service.generate_reply.assert_called_once()
+
+    def test_generate_summary_with_refine_prompt(self, client, monkeypatch, tmp_path):
+        from supersonic_atomizer.gui.routers import chat_router
+        from supersonic_atomizer.gui.chat_history_store import ChatHistoryStore
+
+        history_store = ChatHistoryStore(root_dir=tmp_path / "chat_histories_refine")
+        monkeypatch.setattr(chat_router, "_chat_history_store", history_store)
+
+        client.post("/api/cases/projects/", json={"name": "ref_proj"})
+        client.post("/api/cases/projects/ref_proj/cases/", json={"name": "ref_case"})
+
+        thread_resp = client.post(
+            "/api/chat/threads",
+            json={"project_name": "ref_proj", "case_name": "ref_case", "title": "Refine test"},
+        )
+        thread_id = thread_resp.json()["id"]
+        client.put(
+            f"/api/chat/threads/{thread_id}/messages",
+            json={
+                "project_name": "ref_proj",
+                "case_name": "ref_case",
+                "messages": [{"role": "user", "content": "Explain breakup."}, {"role": "assistant", "content": "Breakup occurs when We > 12."}],
+            },
+        )
+
+        mock_service = MagicMock()
+        mock_service.generate_reply.return_value = "Breakup when We exceeds critical value."
+        monkeypatch.setattr(chat_router, "_chat_service", mock_service)
+
+        resp = client.post(
+            "/api/chat/summary",
+            json={
+                "project_name": "ref_proj",
+                "case_name": "ref_case",
+                "thread_id": thread_id,
+                "max_chars": 150,
+                "refine_prompt": "英語で短く",
+            },
+        )
+        assert resp.status_code == 200
+        assert isinstance(resp.json()["summary"], str)
+        # Verify refine_prompt was forwarded in the messages sent to the service.
+        call_kwargs = mock_service.generate_reply.call_args.kwargs
+        last_msg_content = call_kwargs["messages"][-1]["content"]
+        assert "英語で短く" in last_msg_content
 
 
 class TestUnitsEndpoints:

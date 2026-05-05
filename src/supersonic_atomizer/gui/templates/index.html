@@ -431,21 +431,65 @@
         <p id="chat-case-label" class="chat-case-label">No case selected</p>
       </div>
       <div style="display:flex;gap:8px;align-items:center">
+        <button id="btn-new-chat-thread" type="button" class="chat-clear-btn">New Chat</button>
         <button id="btn-clear-chat" type="button" class="chat-clear-btn">Clear</button>
         <button id="btn-chat-llm-settings" type="button" class="icon-btn" title="LLM settings">⚙</button>
       </div>
     </div>
-    <div id="chat-messages" class="chat-messages">
-      <div class="chat-empty">Select a case to discuss it with the assistant.</div>
-    </div>
-    <form id="chat-form" class="chat-form">
-      <textarea id="chat-input" rows="4" placeholder="Discuss the selected case, setup, or latest result."></textarea>
-      <div class="chat-form-actions">
-        <button id="btn-chat-voice" type="button" class="chat-voice-btn">Voice</button>
-        <button id="btn-send-chat" type="submit" class="chat-send-btn">Send</button>
+    <div class="chat-panel-body">
+      <aside class="chat-thread-sidebar" aria-label="Chat history">
+        <div class="chat-thread-sidebar-title">History</div>
+        <div id="chat-thread-list" class="chat-thread-list">
+          <div class="chat-thread-empty">No chat history yet.</div>
+        </div>
+      </aside>
+      <div class="chat-conversation">
+        <!-- Tab bar -->
+        <div class="chat-inner-tab-bar" role="tablist" aria-label="Chat view tabs">
+          <button type="button" class="chat-inner-tab-btn active" data-inner-tab="conversation" role="tab" aria-selected="true" aria-controls="chat-inner-tab-conversation">チャット</button>
+          <button type="button" class="chat-inner-tab-btn" data-inner-tab="summary" role="tab" aria-selected="false" aria-controls="chat-inner-tab-summary">要約</button>
+        </div>
+
+        <!-- Tab: チャット -->
+        <div id="chat-inner-tab-conversation" class="chat-inner-tab-content" role="tabpanel">
+          <div id="chat-messages" class="chat-messages">
+            <div class="chat-empty">Select a case to discuss it with the assistant.</div>
+          </div>
+          <form id="chat-form" class="chat-form">
+            <textarea id="chat-input" rows="4" placeholder="Discuss the selected case, setup, or latest result."></textarea>
+            <div class="chat-form-actions">
+              <button id="btn-chat-voice" type="button" class="chat-voice-btn">Voice</button>
+              <button id="btn-send-chat" type="submit" class="chat-send-btn">Send</button>
+            </div>
+            <div id="chat-status" class="chat-status"></div>
+          </form>
+        </div>
+
+        <!-- Tab: 要約 -->
+        <div id="chat-inner-tab-summary" class="chat-inner-tab-content" role="tabpanel">
+          <div class="summary-controls">
+            <label for="summary-max-chars">文字数</label>
+            <select id="summary-max-chars" class="summary-max-chars-sel">
+              <option value="150">150</option>
+              <option value="300" selected>300</option>
+              <option value="500">500</option>
+              <option value="1000">1000</option>
+            </select>
+            <button id="btn-generate-summary" type="button" class="chat-send-btn summary-gen-btn">Generate</button>
+          </div>
+          <div id="summary-display" class="summary-display">
+            <p class="summary-empty">チャット履歴がある状態で「Generate」を押すと要約が表示されます。</p>
+          </div>
+          <form id="summary-refine-form" class="chat-form summary-refine-form">
+            <textarea id="summary-refine-input" rows="3" placeholder="要約の修正指示を入力…（例: もっと簡潔に、英語で）"></textarea>
+            <div class="chat-form-actions">
+              <button id="btn-refine-summary" type="submit" class="chat-send-btn">Refine</button>
+            </div>
+            <div id="summary-status" class="chat-status"></div>
+          </form>
+        </div>
       </div>
-      <div id="chat-status" class="chat-status"></div>
-    </form>
+    </div>
   </aside>
 </div>
 
