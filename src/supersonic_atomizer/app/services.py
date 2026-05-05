@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Callable
 
 from supersonic_atomizer.breakup import BreakupModel, select_breakup_model
@@ -552,15 +553,6 @@ class ApplicationService:
 					self.json_writer(simulation_result)
 				if simulation_result.output_metadata.generate_plots:
 					self.plot_generator(simulation_result)
-				# Prune older runs leaving only this run's directory to satisfy
-				# the "latest-only" retention policy.
-				from supersonic_atomizer.io.paths import prune_old_output_runs
-				try:
-					if simulation_result.output_metadata and simulation_result.output_metadata.output_directory:
-						prune_old_output_runs(simulation_result.output_metadata)
-				except Exception:
-					# best-effort cleanup; do not fail the run for cleanup errors
-					pass
 
 			return SimulationRunResult(
 				status="completed",

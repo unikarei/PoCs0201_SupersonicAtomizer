@@ -24,7 +24,8 @@ PLOT_FILENAMES: dict[str, str] = {
 def _generate_run_id() -> str:
 	"""Return a filesystem-safe default run identifier."""
 
-	return datetime.now(UTC).strftime("run-%Y%m%dT%H%M%SZ")
+	# Include microseconds so rapid consecutive runs do not collide.
+	return datetime.now(UTC).strftime("run-%Y%m%dT%H%M%S%fZ")
 
 
 def build_output_metadata(*, output_config: OutputConfig, run_id: str | None = None, project: str | None = None, case_name: str | None = None) -> OutputMetadata:

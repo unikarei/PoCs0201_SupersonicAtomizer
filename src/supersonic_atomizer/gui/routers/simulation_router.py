@@ -67,6 +67,7 @@ def _run_job(job_id: str, case_path: str, gui_state: GUIState) -> None:
 
 def _run_multi_job(
     job_id: str,
+    project_name: str | None,
     case_name: str,
     config_snapshot: dict[str, Any],
     gui_state: GUIState,
@@ -77,6 +78,7 @@ def _run_multi_job(
         expanded_runs = expand_multi_value_config(case_name=case_name, raw_config=config_snapshot)
         batch_result = execute_expanded_runs(
             case_name=case_name,
+            project_name=project_name,
             expanded_runs=expanded_runs,
             runner=_bridge.run_simulation_sync,
         )
@@ -114,7 +116,7 @@ async def run_simulation(
     if body.config:
         thread = threading.Thread(
             target=_run_multi_job,
-            args=(job_id, body.case_name, body.config, gui_state),
+            args=(job_id, body.project_name, body.case_name, body.config, gui_state),
             daemon=True,
             name=f"solver-batch-{job_id[:8]}",
         )

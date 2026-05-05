@@ -137,9 +137,9 @@ class TestMultiRunParsing:
         assert len(expanded) == 4
         assert all("Pt_in=" in run.run_label for run in expanded)
         assert any("critical_weber_number=14" in run.run_label for run in expanded)
-        assert all(run.config["outputs"]["write_csv"] is False for run in expanded)
-        assert all(run.config["outputs"]["write_json"] is False for run in expanded)
-        assert all(run.config["outputs"]["generate_plots"] is False for run in expanded)
+        assert all(run.config["outputs"]["write_csv"] is True for run in expanded)
+        assert all(run.config["outputs"]["write_json"] is True for run in expanded)
+        assert all(run.config["outputs"]["generate_plots"] is True for run in expanded)
 
     def test_expand_multi_value_config_rejects_excessive_run_counts(self):
         config = _base_gui_config()
@@ -236,9 +236,9 @@ class TestMultiRunParsing:
 
         def fake_runner(case_path: str) -> SimulationRunResult:
             snapshot = yaml.safe_load(Path(case_path).read_text(encoding="utf-8"))
-            assert snapshot["outputs"]["write_csv"] is False
-            assert snapshot["outputs"]["write_json"] is False
-            assert snapshot["outputs"]["generate_plots"] is False
+            assert snapshot["outputs"]["write_csv"] is True
+            assert snapshot["outputs"]["write_json"] is True
+            assert snapshot["outputs"]["generate_plots"] is True
             pt_in = float(snapshot["boundary_conditions"]["Pt_in"])
             seen_pressures.append(pt_in)
             return _build_completed_run_result(case_path, pt_in=pt_in)
@@ -251,6 +251,28 @@ class TestMultiRunParsing:
 
         assert batch_result.run_count == 2
         assert seen_pressures == [200000.0, 230000.0]
+
+    def test_execute_expanded_runs_keeps_project_case_identity_in_snapshot_path(self):
+        config = _base_gui_config()
+        expanded = expand_multi_value_config(case_name="demo_case", raw_config=config)
+
+        seen_paths: list[Path] = []
+
+        def fake_runner(case_path: str) -> SimulationRunResult:
+            p = Path(case_path)
+            seen_paths.append(p)
+            return _build_completed_run_result(case_path, pt_in=200000.0)
+
+        execute_expanded_runs(
+            case_name="demo_case",
+            project_name="proj_demo",
+            expanded_runs=expanded,
+            runner=fake_runner,
+        )
+
+        assert seen_paths
+        assert all(p.parent.name == "proj_demo" for p in seen_paths)
+        assert all(p.stem == "demo_case" for p in seen_paths)
 
 
 class TestOverlayHelpers:

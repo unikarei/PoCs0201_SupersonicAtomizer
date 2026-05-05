@@ -28,6 +28,8 @@ def create_app() -> FastAPI:
     This factory is used both at runtime (by uvicorn via the module-level
     ``app`` attribute) and in tests (via ``TestClient(create_app())``).
     """
+    from supersonic_atomizer.gui.case_store import CaseStore
+    from supersonic_atomizer.gui.output_artifact_store import sync_output_tree_with_cases
     from supersonic_atomizer.gui.routers.cases_router import router as cases_r
     from supersonic_atomizer.gui.routers.chat_router import router as chat_r
     from supersonic_atomizer.gui.routers.index_router import router as index_r
@@ -53,6 +55,16 @@ def create_app() -> FastAPI:
     application.include_router(sim_r, prefix="/api/simulation", tags=["simulation"])
     application.include_router(units_r, prefix="/api/units", tags=["units"])
     application.include_router(debug_r, prefix="/api/debug", tags=["debug"])
+
+    # Startup output-tree reconciliation:
+    # mirror cases/<project>/<case>.yaml into outputs/<project>/<case>/ and
+    # move unmatched output folders under outputs/backup/.
+    try:
+        sync_output_tree_with_cases(CaseStore())
+    except Exception as exc:  # pragma: no cover - non-fatal startup safety
+        _logging.getLogger("supersonic_atomizer").warning(
+            "Output tree synchronization failed at startup: %s", exc
+        )
 
     return application
 

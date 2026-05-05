@@ -485,6 +485,80 @@ class TestCasesEndpoints:
         assert "application/x-yaml" in resp.headers["content-type"]
         assert "fluid:" in resp.text
 
+    def test_startup_output_sync_creates_case_dirs_and_moves_unmatched(self, tmp_path):
+        from supersonic_atomizer.gui.case_store import CaseStore
+        from supersonic_atomizer.gui.output_artifact_store import sync_output_tree_with_cases
+
+        cases_dir = tmp_path / "cases"
+        outputs_dir = tmp_path / "outputs"
+        store = CaseStore(cases_dir=cases_dir)
+        store.create_project("P1")
+        store.create("C1", project="P1")
+        store.create("C2", project="P1")
+
+        # unmatched output entries that should be moved to backup
+        (outputs_dir / "OrphanProject" / "OrphanCase").mkdir(parents=True, exist_ok=True)
+        (outputs_dir / "random_file.txt").write_text("x", encoding="utf-8")
+
+        summary = sync_output_tree_with_cases(store, output_root=outputs_dir)
+
+        assert (outputs_dir / "P1" / "C1").is_dir()
+        assert (outputs_dir / "P1" / "C2").is_dir()
+        assert summary.ensured_case_dirs == 2
+        assert summary.moved_entries >= 2
+        assert not (outputs_dir / "OrphanProject").exists()
+        assert (outputs_dir / "backup").is_dir()
+
+    def test_project_case_has_result_true_from_disk_artifacts(self, client, app_with_tmp_store):
+        _, tmp_dir = app_with_tmp_store
+        # Create project/case in CaseStore used by the app.
+        client.post("/api/cases/projects/", json={"name": "disk_proj"})
+        client.post("/api/cases/projects/disk_proj/cases/", json={"name": "disk_case"})
+
+        # Emulate existing output artifacts on disk after restart.
+        run_dir = Path("outputs") / "disk_proj" / "disk_case" / "run-20260101T000000Z"
+        run_dir.mkdir(parents=True, exist_ok=True)
+        (run_dir / "results.csv").write_text(
+            "# UNITS: {}\n"
+            "x,A,pressure,temperature,density,working_fluid_velocity,Mach_number,droplet_velocity,slip_velocity,droplet_mean_diameter,droplet_maximum_diameter,Weber_number,breakup_flag,droplet_reynolds_number\n"
+            "0.0,1e-4,200000,500,1.2,120,0.8,10,5,5e-5,1e-4,8,false,200\n",
+            encoding="utf-8",
+        )
+
+        try:
+            resp = client.get("/api/cases/projects/disk_proj/cases/disk_case")
+            assert resp.status_code == 200
+            assert resp.json().get("has_result") is True
+        finally:
+            # cleanup local artifacts created by this test
+            import shutil
+            shutil.rmtree(Path("outputs") / "disk_proj", ignore_errors=True)
+
+    def test_project_case_last_result_falls_back_to_disk(self, client):
+        client.post("/api/cases/projects/", json={"name": "disk_proj2"})
+        client.post("/api/cases/projects/disk_proj2/cases/", json={"name": "disk_case2"})
+
+        run_dir = Path("outputs") / "disk_proj2" / "disk_case2" / "run-20260101T010101Z"
+        run_dir.mkdir(parents=True, exist_ok=True)
+        (run_dir / "results.csv").write_text(
+            "# UNITS: {}\n"
+            "x,A,pressure,temperature,density,working_fluid_velocity,Mach_number,droplet_velocity,slip_velocity,droplet_mean_diameter,droplet_maximum_diameter,Weber_number,breakup_flag,droplet_reynolds_number\n"
+            "0.0,1e-4,210000,510,1.1,130,0.9,11,4,4e-5,8e-5,9,false,210\n",
+            encoding="utf-8",
+        )
+
+        try:
+            resp = client.get("/api/cases/projects/disk_proj2/cases/disk_case2/last_result")
+            assert resp.status_code == 200
+            data = resp.json()
+            assert data["status"] == "completed"
+            assert isinstance(data.get("table_rows"), list)
+            assert len(data["table_rows"]) == 1
+            assert "csv" in data and "pressure" in data["csv"]
+        finally:
+            import shutil
+            shutil.rmtree(Path("outputs") / "disk_proj2", ignore_errors=True)
+
 
 class TestSimulationEndpoints:
     """Tests for the simulation run/status/result flow (mocked solver)."""

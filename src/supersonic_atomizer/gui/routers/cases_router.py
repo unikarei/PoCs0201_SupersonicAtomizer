@@ -17,6 +17,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import PlainTextResponse, Response
 
 from supersonic_atomizer.gui.dependencies import get_gui_state
+from supersonic_atomizer.gui.output_artifact_store import (
+    has_case_output,
+    load_last_result_payload_from_output,
+)
 from supersonic_atomizer.gui.state import GUIState
 
 from supersonic_atomizer.gui.case_store import CaseNameError, CaseNotFoundError, CaseStore, ProjectNameError, ProjectNotFoundError
@@ -186,9 +190,10 @@ async def get_project_case(project: str, name: str) -> dict[str, Any]:
     store = _get_store()
     try:
         cfg = store.load(name, project=project)
-        # Indicate whether a completed run exists for this project/case so
-        # the client can avoid unnecessary /last_result requests that yield 404.
-        has_result = get_job_store().latest_completed_for_case(_case_ref(project, name)) is not None
+        # Prefer disk artifacts for has_result so the UI still works after app restart.
+        has_result = has_case_output(project, name)
+        if not has_result:
+            has_result = get_job_store().latest_completed_for_case(_case_ref(project, name)) is not None
         return {**cfg, "has_result": has_result}
     except ProjectNameError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -290,7 +295,10 @@ async def get_last_result_for_project_case(project: str, name: str, state: GUISt
     job_store = get_job_store()
     record = job_store.latest_completed_for_case(_case_ref(project, name))
     if record is None:
-        raise HTTPException(status_code=404, detail=f"No completed run found for case {name!r} in project {project!r}.")
+        payload = load_last_result_payload_from_output(project, name)
+        if payload is None:
+            raise HTTPException(status_code=404, detail=f"No completed run found for case {name!r} in project {project!r}.")
+        return payload
 
     plots: dict[str, str] = {}
     table_rows: list[dict[str, Any]] = []
@@ -408,7 +416,10 @@ async def get_case(name: str) -> dict[str, Any]:
     store = _get_store()
     try:
         cfg = store.load(name)
-        has_result = get_job_store().latest_completed_for_case(name) is not None
+        # Legacy fallback: treat default project as canonical output location.
+        has_result = has_case_output(_get_store().default_project_name, name)
+        if not has_result:
+            has_result = get_job_store().latest_completed_for_case(name) is not None
         return {**cfg, "has_result": has_result}
     except CaseNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -445,7 +456,10 @@ async def get_last_result_for_case(name: str, state: GUIState = Depends(get_gui_
     job_store = get_job_store()
     record = job_store.latest_completed_for_case(name)
     if record is None:
-        raise HTTPException(status_code=404, detail=f"No completed run found for case {name!r}.")
+        payload = load_last_result_payload_from_output(_get_store().default_project_name, name)
+        if payload is None:
+            raise HTTPException(status_code=404, detail=f"No completed run found for case {name!r}.")
+        return payload
 
     # Build payload similar to simulation_router.get_simulation_result
     plots: dict[str, str] = {}

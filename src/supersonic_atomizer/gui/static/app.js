@@ -42,6 +42,7 @@ const MIN_RIGHT_PANEL_WIDTH = 280;
 // Loaded from /api/units/groups — keyed by group name.
 // Each group: { [unitLabel]: { scale: number, offset: number } }
 let unitGroupSpecs = {};
+let caseSelectionToken = 0;
 
 // Maps input field name → unit group name for inline unit selectors.
 const INPUT_FIELD_UNIT_GROUP = {
@@ -85,6 +86,8 @@ const INPUT_FIELD_UNIT_GROUP = {
 
 // Client-side cache mapping "project/case" -> last_result payload
 let caseResultCache = new Map();
+// Tracks which case reference has finished config-form population.
+let caseConfigReadyRef = null;
 
 /**
  * Convert a single SI value to the given display unit.
@@ -328,6 +331,19 @@ document.querySelectorAll(".tab-btn").forEach(btn => {
     btn.classList.add("active");
     const id = "tab-" + btn.dataset.tab;
     document.getElementById(id).classList.remove("hidden");
+
+    // Requirement P34-T09: when Graph/Table/Report is opened for a selected
+    // case, refresh from server-side last_result which can be disk-backed.
+    const isPostTab = ["post-graphs", "post-table", "post-report"].includes(btn.dataset.tab);
+    if (isPostTab && activeProjectName && activeCaseName) {
+      void (async () => {
+        try {
+          await refreshLastResultForCase(activeProjectName, activeCaseName, { preferFiles: "1", cache: true });
+        } catch (e) {
+          console.debug("Post-tab refresh from last_result failed:", e && e.message ? e.message : e);
+        }
+      })();
+    }
   });
 });
 
@@ -347,6 +363,22 @@ function projectCaseUrl(projectName, caseName) {
 function getActiveCaseRef() {
   if (!activeCaseName) return null;
   return `${getActiveProjectName()}/${activeCaseName}`;
+}
+
+function markCaseConfigReady(caseRef) {
+  caseConfigReadyRef = caseRef || null;
+}
+
+function isCaseConfigReady(caseRef) {
+  if (!caseRef) return false;
+  return caseConfigReadyRef === caseRef;
+}
+
+function rerenderReportIfCaseConfigReady(caseRef = null) {
+  const resolvedRef = caseRef || getActiveCaseRef();
+  if (!resolvedRef) return;
+  if (!isCaseConfigReady(resolvedRef)) return;
+  renderReport();
 }
 
 function getCaseChatHistory() {
@@ -1168,14 +1200,17 @@ async function loadCaseList(projectName = getActiveProjectName()) {
 }
 
 async function selectCase(projectName, name) {
+  const selectionToken = ++caseSelectionToken;
   activeProjectName = projectName;
   activeCaseName = name;
+  markCaseConfigReady(null);
   activeChatThreadId = null;
   expandedProjects.add(projectName);
   updateActiveCaseLabel();
   renderProjectCaseTree();
   try {
     await loadChatThreadsForActiveCase({ keepCurrent: false });
+    if (selectionToken !== caseSelectionToken) return;
   } catch (error) {
     setChatStatus(`Failed loading chat history: ${error.message}`, true);
   }
@@ -1221,8 +1256,13 @@ async function selectCase(projectName, name) {
   // we may fetch last_result only when the server indicates one exists.
   try {
     const cfg = await cfgPromise;
+    if (selectionToken !== caseSelectionToken) return;
     if (cfg) {
       await tryPopulateCaseConfig(cfg);
+      if (selectionToken !== caseSelectionToken) return;
+      markCaseConfigReady(caseRef);
+      // Ensure report uses freshly populated form values on the first click.
+      rerenderReportIfCaseConfigReady(caseRef);
     }
 
     // If we already have a cached result, we rendered it earlier. Otherwise
@@ -1233,11 +1273,11 @@ async function selectCase(projectName, name) {
       if (hasResult) {
         try {
           const preferFiles = document.querySelector('#tab-graphs') && !document.querySelector('#tab-graphs').classList.contains('hidden') ? '1' : '0';
-          const last = await apiFetch(`${projectCaseUrl(projectName, name)}/last_result?prefer_files=${preferFiles}`);
-          if (last) {
-            caseResultCache.set(caseRef, last);
-            applyLastResultToUI(last, caseRef);
-          }
+          await refreshLastResultForCase(projectName, name, {
+            preferFiles,
+            cache: true,
+            expectedSelectionToken: selectionToken,
+          });
         } catch (e) {
           console.debug(`Failed fetching last_result for ${caseRef}:`, e && e.message ? e.message : e);
         }
@@ -1311,9 +1351,28 @@ function applyLastResultToUI(last, caseRef) {
   lastDiagnostics = last.diagnostics || null;
   renderPlots(fields);
   renderTable(tableRows);
-  renderReport();
+  // Report summary depends on loaded case-config forms; defer until ready.
+  rerenderReportIfCaseConfigReady(caseRef);
   const dlBtn = document.getElementById("btn-download-csv");
   if (dlBtn) dlBtn.disabled = !csvContent;
+}
+
+async function refreshLastResultForCase(
+  projectName,
+  caseName,
+  {
+    preferFiles = "1",
+    cache = true,
+    expectedSelectionToken = null,
+  } = {},
+) {
+  const last = await apiFetch(`${projectCaseUrl(projectName, caseName)}/last_result?prefer_files=${preferFiles}`);
+  if (!last) return null;
+  if (expectedSelectionToken !== null && expectedSelectionToken !== caseSelectionToken) return null;
+  const caseRef = `${projectName}/${caseName}`;
+  if (cache) caseResultCache.set(caseRef, last);
+  applyLastResultToUI(last, caseRef);
+  return last;
 }
 
 async function createProject(projectName) {
@@ -2308,6 +2367,7 @@ document.getElementById("btn-save-conditions").addEventListener("click", async (
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(merged),
     });
+    rerenderReportIfCaseConfigReady();
     statusEl.textContent = "✓ Saved";
     statusEl.style.color = "";
     setTimeout(() => { statusEl.textContent = ""; }, 2000);
@@ -2505,6 +2565,7 @@ document.getElementById("btn-save-grid").addEventListener("click", async () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(merged),
     });
+    rerenderReportIfCaseConfigReady();
     statusEl.textContent = "✓ Saved";
     setTimeout(() => { statusEl.textContent = ""; }, 2000);
   } catch (e) {
@@ -2580,10 +2641,18 @@ async function onRunCompleted(jobId) {
       ? `✓ Simulation sweep completed successfully (${runCount} runs).`
       : "✓ Simulation completed successfully.";
     setStatus(solveStatus, statusMessage, "success");
-    renderPlots(fields);
-    renderTable(tableRows);
-    renderReport();
-    document.getElementById("btn-download-csv").disabled = false;
+    const caseRef = getActiveCaseRef();
+    if (caseRef) {
+      caseResultCache.set(caseRef, {
+        plots: plotData,
+        table_rows: tableRows,
+        csv: csvContent,
+        plot_fields: fields,
+        run_count: runCount,
+        diagnostics: lastDiagnostics,
+      });
+      applyLastResultToUI(caseResultCache.get(caseRef), caseRef);
+    }
     // Extract primary-breakup metrics from diagnostics messages if present
     try {
       const summaryEl = document.getElementById("primary-breakup-summary");
@@ -3046,11 +3115,7 @@ async function openGraphSettingsDialog() {
           statusEl.textContent = "✓ Units applied, updating plots...";
           // Reload last_result for active case to regenerate plots with new units
           if (activeProjectName && activeCaseName) {
-            const last = await apiFetch(`${projectCaseUrl(activeProjectName, activeCaseName)}/last_result`);
-            plotData = last.plots || {};
-            const fields = last.plot_fields || Object.keys(plotData);
-            renderPlots(fields);
-            renderTable(last.table_rows || []);
+            await refreshLastResultForCase(activeProjectName, activeCaseName, { preferFiles: "1", cache: true });
           }
           statusEl.textContent = "✓ Units applied";
           // Close dialog and show success toast
@@ -3102,11 +3167,7 @@ document.getElementById("graph-settings-apply-all").addEventListener("click", as
     });
     statusEl.textContent = "✓ Units applied, updating plots...";
     if (activeProjectName && activeCaseName) {
-      const last = await apiFetch(`${projectCaseUrl(activeProjectName, activeCaseName)}/last_result`);
-      plotData = last.plots || {};
-      const fields = last.plot_fields || Object.keys(plotData);
-      renderPlots(fields);
-      renderTable(last.table_rows || []);
+      await refreshLastResultForCase(activeProjectName, activeCaseName, { preferFiles: "1", cache: true });
     }
     statusEl.textContent = "✓ Units applied";
     // Close dialog and show success toast

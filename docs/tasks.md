@@ -1447,3 +1447,16 @@ Phase 34 is done when the FastAPI GUI shows `x` vs `Area Profile` in both the Gr
     - CSS: Add `flex-shrink: 0` to `.chat-form`. Add `overflow: hidden` to `.chat-inner-tab-content`. Redesign `.chat-inner-tab-bar` and `.chat-inner-tab-btn` to use the same pill/rounded-rectangle style as the existing `.tab-bar` / `.tab-btn` (dark strip background, light inactive tabs, white active tab with bold label).
     - JS: Replace `classList.toggle("hidden")` in `switchChatInnerTab` with direct `style.display` assignment to eliminate CSS specificity conflicts. Add `type="button"` to the tab buttons in the HTML for defensive correctness.
   - **Completion criteria:** Chat input form is always visible in the チャット tab; clicking 要約 tab shows the summary panel and hides the chat messages; both inner tabs visually match the Project Explorer tab style.
+
+- [ ] **P34-T09 — Enforce project/case output tree and disk-backed post-tab restore**
+  - **Purpose:** Guarantee deterministic output artifact organization and immediate post-tab rendering from disk-backed artifacts across app restarts.
+  - **Dependencies:** P33-T02, P34-T06.
+  - **Scope:**
+    - Startup reconciliation: on GUI app startup, create `outputs/<project>/<case>/` for every case in `cases/<project>/<case>.yaml`; move unmatched output folders/files under `outputs/backup/`.
+    - Solve-time placement: preserve `outputs/<project>/<case>/<run-id>/` artifact writes for CSV/JSON/plots.
+    - Read-time restore: `last_result` endpoints must prefer in-memory job records when available and otherwise load latest artifacts from output directories.
+    - UI behavior: when Graph/Table/Report tabs are clicked for a selected case, request latest `last_result` from server and render immediately from returned artifact payload.
+  - **Completion criteria:**
+    - Output tree follows project/case hierarchy for all cases.
+    - Startup reconciliation creates missing case output directories and quarantines unmatched output entries to backup.
+    - Post tabs can render using output artifacts even after application restart.

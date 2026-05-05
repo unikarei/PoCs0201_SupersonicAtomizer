@@ -232,9 +232,6 @@ def _ensure_solver_compatible_config(raw_config: dict[str, Any]) -> dict[str, An
                 geometry["area_distribution"] = {"type": "table", "x": xs, "A": As}
 
     outputs = deepcopy(config.get("outputs", {}))
-    outputs["write_csv"] = False
-    outputs["write_json"] = False
-    outputs["generate_plots"] = False
     if "output_directory" not in outputs and "output_dir" in outputs:
         outputs["output_directory"] = outputs["output_dir"]
     config["outputs"] = outputs
@@ -303,6 +300,7 @@ def expand_multi_value_config(
 def execute_expanded_runs(
     *,
     case_name: str,
+    project_name: str | None = None,
     expanded_runs: Iterable[ExpandedRunConfig],
     runner: Callable[[str], SimulationRunResult],
 ) -> MultiRunSimulationResult:
@@ -311,8 +309,10 @@ def execute_expanded_runs(
 
     with TemporaryDirectory(prefix="supersonic_atomizer_gui_") as temp_dir_name:
         temp_dir = Path(temp_dir_name)
+        project_dir = temp_dir / (project_name or "default")
+        project_dir.mkdir(parents=True, exist_ok=True)
+        snapshot_path = project_dir / f"{case_name}.yaml"
         for expanded_run in expanded_runs:
-            snapshot_path = temp_dir / f"{case_name}_run_{expanded_run.run_index:03d}.yaml"
             snapshot_path.write_text(
                 yaml.safe_dump(expanded_run.config, sort_keys=False),
                 encoding="utf-8",
