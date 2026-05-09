@@ -55,7 +55,7 @@ geometry:
     - 0.00016735
     - 0.00016735
 outputs:
-  output_directory: outputs/TEST001
+  output_directory: outputs
   write_csv: true
   write_json: true
   generate_plots: true

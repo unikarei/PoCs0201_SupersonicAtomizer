@@ -25,6 +25,7 @@ All 152+ existing tests must continue to pass alongside these new tests.
 
 from __future__ import annotations
 
+import base64
 import sys
 import threading
 import time
@@ -335,6 +336,8 @@ class TestIndexEndpoint:
         assert 'id="chat-form"' in html
         assert 'data-tab="post-report"' in html
         assert 'id="report-content"' in html
+        assert 'id="area-preview-canvas"' in html
+        assert "x vs Area figure for the current grid definition." in html
         assert "Right-click a project or case" in html
 
     def test_get_favicon_returns_no_content(self, client):
@@ -558,6 +561,33 @@ class TestCasesEndpoints:
         finally:
             import shutil
             shutil.rmtree(Path("outputs") / "disk_proj2", ignore_errors=True)
+
+    def test_project_case_last_result_from_disk_orders_plot_fields_with_area_first(self, client):
+        client.post("/api/cases/projects/", json={"name": "disk_proj3"})
+        client.post("/api/cases/projects/disk_proj3/cases/", json={"name": "disk_case3"})
+
+        run_dir = Path("outputs") / "disk_proj3" / "disk_case3" / "run-20260101T020202Z"
+        plots_dir = run_dir / "plots"
+        plots_dir.mkdir(parents=True, exist_ok=True)
+
+        # 1x1 transparent PNG
+        png_bytes = base64.b64decode(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9WnW2n4AAAAASUVORK5CYII="
+        )
+        # Create files in a non-preferred sequence to ensure API ordering logic is used.
+        (plots_dir / "weber_number.png").write_bytes(png_bytes)
+        (plots_dir / "pressure.png").write_bytes(png_bytes)
+        (plots_dir / "area_profile.png").write_bytes(png_bytes)
+
+        try:
+            resp = client.get("/api/cases/projects/disk_proj3/cases/disk_case3/last_result")
+            assert resp.status_code == 200
+            data = resp.json()
+            assert data["plot_fields"][0] == "area_profile"
+            assert "pressure" in data["plot_fields"]
+        finally:
+            import shutil
+            shutil.rmtree(Path("outputs") / "disk_proj3", ignore_errors=True)
 
 
 class TestSimulationEndpoints:
@@ -821,6 +851,110 @@ class TestChatEndpoints:
         call_kwargs = mock_service.generate_reply.call_args.kwargs
         last_msg_content = call_kwargs["messages"][-1]["content"]
         assert "英語で短く" in last_msg_content
+
+    def test_chat_config_change_pattern4_lifecycle(self, client, monkeypatch):
+        from supersonic_atomizer.gui.routers import chat_router
+        from supersonic_atomizer.gui.chat_change_workflow import ChatChangeWorkflowStore
+
+        monkeypatch.setattr(chat_router, "_chat_change_store", ChatChangeWorkflowStore())
+
+        client.post("/api/cases/projects/", json={"name": "cfg_proj"})
+        client.post("/api/cases/projects/cfg_proj/cases/", json={"name": "cfg_case"})
+
+        proposal_resp = client.post(
+            "/api/chat/config-changes/proposals",
+            json={
+                "project_name": "cfg_proj",
+                "case_name": "cfg_case",
+                "pattern": 4,
+                "reason": "Tune inlet pressure",
+                "changes": [{"path": "boundary_conditions.Pt_in", "value": 210000.0}],
+            },
+        )
+        assert proposal_resp.status_code == 200
+        proposal_data = proposal_resp.json()
+        proposal_id = proposal_data["proposal_id"]
+        assert proposal_data["status"] == "proposed"
+        assert proposal_data["requires_approval"] is True
+
+        apply_resp = client.post(
+            f"/api/chat/config-changes/proposals/{proposal_id}/apply",
+            json={
+                "project_name": "cfg_proj",
+                "case_name": "cfg_case",
+                "approved_by_user": True,
+            },
+        )
+        assert apply_resp.status_code == 200
+        assert apply_resp.json()["status"] == "applied"
+
+        confirm_resp = client.post(
+            f"/api/chat/config-changes/proposals/{proposal_id}/confirm",
+            json={
+                "project_name": "cfg_proj",
+                "case_name": "cfg_case",
+                "confirmed_by_user": True,
+            },
+        )
+        assert confirm_resp.status_code == 200
+        assert confirm_resp.json()["status"] == "confirmed"
+
+        case_resp = client.get("/api/cases/projects/cfg_proj/cases/cfg_case")
+        assert case_resp.status_code == 200
+        assert case_resp.json()["boundary_conditions"]["Pt_in"] == pytest.approx(210000.0)
+
+    def test_chat_config_change_apply_requires_explicit_approval(self, client, monkeypatch):
+        from supersonic_atomizer.gui.routers import chat_router
+        from supersonic_atomizer.gui.chat_change_workflow import ChatChangeWorkflowStore
+
+        monkeypatch.setattr(chat_router, "_chat_change_store", ChatChangeWorkflowStore())
+
+        client.post("/api/cases/projects/", json={"name": "cfg_proj_no_approval"})
+        client.post("/api/cases/projects/cfg_proj_no_approval/cases/", json={"name": "cfg_case_no_approval"})
+
+        proposal_resp = client.post(
+            "/api/chat/config-changes/proposals",
+            json={
+                "project_name": "cfg_proj_no_approval",
+                "case_name": "cfg_case_no_approval",
+                "pattern": 4,
+                "changes": [{"path": "boundary_conditions.Pt_in", "value": 205000.0}],
+            },
+        )
+        assert proposal_resp.status_code == 200
+        proposal_id = proposal_resp.json()["proposal_id"]
+
+        apply_resp = client.post(
+            f"/api/chat/config-changes/proposals/{proposal_id}/apply",
+            json={
+                "project_name": "cfg_proj_no_approval",
+                "case_name": "cfg_case_no_approval",
+                "approved_by_user": False,
+            },
+        )
+        assert apply_resp.status_code == 400
+        assert "approved_by_user" in apply_resp.json()["detail"]
+
+    def test_chat_config_change_rejects_out_of_scope_path(self, client, monkeypatch):
+        from supersonic_atomizer.gui.routers import chat_router
+        from supersonic_atomizer.gui.chat_change_workflow import ChatChangeWorkflowStore
+
+        monkeypatch.setattr(chat_router, "_chat_change_store", ChatChangeWorkflowStore())
+
+        client.post("/api/cases/projects/", json={"name": "cfg_proj_bad_path"})
+        client.post("/api/cases/projects/cfg_proj_bad_path/cases/", json={"name": "cfg_case_bad_path"})
+
+        proposal_resp = client.post(
+            "/api/chat/config-changes/proposals",
+            json={
+                "project_name": "cfg_proj_bad_path",
+                "case_name": "cfg_case_bad_path",
+                "pattern": 4,
+                "changes": [{"path": "outputs.write_csv", "value": False}],
+            },
+        )
+        assert proposal_resp.status_code == 400
+        assert "out of scope" in proposal_resp.json()["detail"]
 
 
 class TestUnitsEndpoints:

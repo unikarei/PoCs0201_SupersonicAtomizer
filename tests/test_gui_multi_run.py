@@ -3,6 +3,7 @@ from __future__ import annotations
 import sys
 import time
 import uuid
+from dataclasses import replace
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -12,7 +13,7 @@ import yaml
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from supersonic_atomizer.app.services import SimulationRunResult
-from supersonic_atomizer.domain import RunDiagnostics, SimulationResult
+from supersonic_atomizer.domain import OutputMetadata, RunDiagnostics, SimulationResult
 from supersonic_atomizer.domain.state_models import (
     DropletSolution,
     DropletState,
@@ -339,13 +340,26 @@ def client(app_with_tmp_store):
 
 class TestFastApiMultiRunFlow:
 
-    def test_run_parameter_sweep_returns_aggregated_overlay_results(self, client, monkeypatch):
+    def test_run_parameter_sweep_returns_aggregated_overlay_results(self, client, monkeypatch, app_with_tmp_store):
+        _, tmp_dir = app_with_tmp_store
         client.post("/api/cases/", json={"name": "multi_run_case"})
 
         def fake_runner(case_path: str) -> SimulationRunResult:
             snapshot = yaml.safe_load(Path(case_path).read_text(encoding="utf-8"))
             pt_in = float(snapshot["boundary_conditions"]["Pt_in"])
-            return _build_completed_run_result(case_path, pt_in=pt_in)
+            run_result = _build_completed_run_result(case_path, pt_in=pt_in)
+            sim = run_result.simulation_result
+            assert sim is not None
+            run_id = f"run-{int(pt_in)}"
+            output_dir = tmp_dir / "outputs" / "default" / "multi_run_case" / run_id
+            with_metadata = replace(
+                sim,
+                output_metadata=OutputMetadata(
+                    run_id=run_id,
+                    output_directory=str(output_dir),
+                ),
+            )
+            return replace(run_result, simulation_result=with_metadata)
 
         monkeypatch.setattr(
             "supersonic_atomizer.gui.routers.simulation_router._bridge",
@@ -364,7 +378,7 @@ class TestFastApiMultiRunFlow:
         uuid.UUID(job_id)
 
         status_response = None
-        for _ in range(30):
+        for _ in range(80):
             status_response = client.get(f"/api/simulation/status/{job_id}")
             assert status_response.status_code == 200
             if status_response.json()["status"] != "running":
@@ -385,3 +399,8 @@ class TestFastApiMultiRunFlow:
         assert payload["table_rows"]
         assert "run_label" in payload["table_rows"][0]
         assert "Pt_in=200000" in payload["csv"]
+
+        # Ensure Solve(multi-run) persists case-level overlay PNGs.
+        case_plots_dir = tmp_dir / "outputs" / "default" / "multi_run_case" / "plots"
+        assert (case_plots_dir / "pressure_overlay.png").is_file()
+        assert (case_plots_dir / "temperature_overlay.png").is_file()

@@ -49,6 +49,9 @@ class OutputMetadata:
 	write_csv: bool = True
 	write_json: bool = True
 	generate_plots: bool = True
+	# Propagate the OutputConfig.clean_case flag so writers can decide
+	# whether to remove existing case contents prior to writing.
+	clean_case: bool = True
 
 
 @dataclass(frozen=True, slots=True)

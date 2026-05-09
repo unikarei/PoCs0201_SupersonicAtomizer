@@ -115,3 +115,54 @@ class ChatSummaryRequest(BaseModel):
 
 class ChatSummaryResponse(BaseModel):
     summary: str
+
+
+class ChatConfigChangeItem(BaseModel):
+    path: str
+    value: Any
+
+
+class ChatConfigChangeProposalRequest(BaseModel):
+    case_name: str
+    project_name: str | None = None
+    pattern: int = 4
+    reason: str | None = None
+    changes: list[ChatConfigChangeItem]
+
+
+class ChatConfigChangeDiffItem(BaseModel):
+    path: str
+    before: Any = None
+    after: Any = None
+
+
+class ChatConfigChangeProposalResponse(BaseModel):
+    proposal_id: str | None = None
+    case_name: str
+    project_name: str | None = None
+    pattern: int
+    status: str
+    reason: str | None = None
+    diff: list[ChatConfigChangeDiffItem]
+    proposed_changes: list[ChatConfigChangeItem]
+    requires_approval: bool = False
+    requires_confirmation: bool = False
+    message: str | None = None
+
+
+class ChatConfigChangeApplyRequest(BaseModel):
+    case_name: str
+    project_name: str | None = None
+    approved_by_user: bool
+
+
+class ChatConfigChangeConfirmRequest(BaseModel):
+    case_name: str
+    project_name: str | None = None
+    confirmed_by_user: bool
+
+
+class ChatConfigChangeRejectRequest(BaseModel):
+    case_name: str
+    project_name: str | None = None
+    rejected_by_user: bool

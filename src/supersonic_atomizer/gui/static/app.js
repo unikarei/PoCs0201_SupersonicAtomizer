@@ -619,6 +619,120 @@ function normalizeChatMessagesForApi(messages) {
     .map(message => ({ role: message.role, content: message.content }));
 }
 
+function appendChatSystemMessage(content) {
+  const history = getCaseChatHistory();
+  setCaseChatHistory([...history, { role: "system", content }]);
+  renderChatHistory();
+}
+
+function formatProposalDiff(diffRows) {
+  if (!Array.isArray(diffRows) || diffRows.length === 0) {
+    return "(no diff rows)";
+  }
+  return diffRows
+    .map(row => `${row.path}: ${JSON.stringify(row.before)} -> ${JSON.stringify(row.after)}`)
+    .join("\n");
+}
+
+function parseCfgProposeCommand(commandText) {
+  const stripped = commandText.replace("/cfg-propose", "").trim();
+  if (!stripped) {
+    throw new Error("Usage: /cfg-propose dotted.path=value [dotted.path=value ...]");
+  }
+  const parts = stripped.split(/\s+/).filter(Boolean);
+  const changes = parts.map(part => {
+    const eqIdx = part.indexOf("=");
+    if (eqIdx < 1) {
+      throw new Error(`Invalid token: ${part}`);
+    }
+    const path = part.slice(0, eqIdx).trim();
+    const rawValue = part.slice(eqIdx + 1).trim();
+    if (!path || rawValue.length === 0) {
+      throw new Error(`Invalid token: ${part}`);
+    }
+    const asNumber = Number(rawValue);
+    const value = Number.isFinite(asNumber) ? asNumber : rawValue;
+    return { path, value };
+  });
+  return changes;
+}
+
+async function handleChatConfigCommand(text) {
+  if (!text.startsWith("/cfg-")) return false;
+  if (!activeCaseName) throw new Error("Select a case first.");
+
+  if (text.startsWith("/cfg-propose")) {
+    const changes = parseCfgProposeCommand(text);
+    const response = await apiFetch("/api/chat/config-changes/proposals", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        project_name: getActiveProjectName(),
+        case_name: activeCaseName,
+        pattern: 4,
+        changes,
+      }),
+    });
+    const proposalId = response.proposal_id || "(none)";
+    appendChatSystemMessage(
+      `Config proposal created: ${proposalId}\n${formatProposalDiff(response.diff)}\nApprove with: /cfg-apply ${proposalId}`
+    );
+    return true;
+  }
+
+  if (text.startsWith("/cfg-apply")) {
+    const proposalId = text.replace("/cfg-apply", "").trim();
+    if (!proposalId) throw new Error("Usage: /cfg-apply <proposal_id>");
+    const response = await apiFetch(`/api/chat/config-changes/proposals/${encodeURIComponent(proposalId)}/apply`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        project_name: getActiveProjectName(),
+        case_name: activeCaseName,
+        approved_by_user: true,
+      }),
+    });
+    appendChatSystemMessage(
+      `Config proposal applied: ${proposalId}\n${formatProposalDiff(response.diff)}\nConfirm with: /cfg-confirm ${proposalId}`
+    );
+    return true;
+  }
+
+  if (text.startsWith("/cfg-confirm")) {
+    const proposalId = text.replace("/cfg-confirm", "").trim();
+    if (!proposalId) throw new Error("Usage: /cfg-confirm <proposal_id>");
+    await apiFetch(`/api/chat/config-changes/proposals/${encodeURIComponent(proposalId)}/confirm`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        project_name: getActiveProjectName(),
+        case_name: activeCaseName,
+        confirmed_by_user: true,
+      }),
+    });
+    appendChatSystemMessage(`Config proposal confirmed: ${proposalId}`);
+    return true;
+  }
+
+  if (text.startsWith("/cfg-reject")) {
+    const proposalId = text.replace("/cfg-reject", "").trim();
+    if (!proposalId) throw new Error("Usage: /cfg-reject <proposal_id>");
+    await apiFetch(`/api/chat/config-changes/proposals/${encodeURIComponent(proposalId)}/reject`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        project_name: getActiveProjectName(),
+        case_name: activeCaseName,
+        rejected_by_user: true,
+      }),
+    });
+    appendChatSystemMessage(`Config proposal rejected: ${proposalId}`);
+    return true;
+  }
+
+  throw new Error("Unknown /cfg command.");
+}
+
 async function submitChatMessage() {
   if (!activeCaseName) return;
   const input = document.getElementById("chat-input");
@@ -632,6 +746,24 @@ async function submitChatMessage() {
 
   const history = getCaseChatHistory();
   const userMessage = { role: "user", content: text };
+  setCaseChatHistory([...history, userMessage]);
+  renderChatHistory();
+
+  try {
+    const handled = await handleChatConfigCommand(text);
+    if (handled) {
+      input.value = "";
+      setChatStatus("");
+      return;
+    }
+  } catch (error) {
+    setCaseChatHistory([...getCaseChatHistory(), { role: "system", content: error.message }]);
+    renderChatHistory();
+    input.value = "";
+    setChatStatus("Config command failed.", true);
+    return;
+  }
+
   const pendingMessage = { role: "assistant", content: "Thinking..." };
   setCaseChatHistory([...history, userMessage, pendingMessage]);
   renderChatHistory();

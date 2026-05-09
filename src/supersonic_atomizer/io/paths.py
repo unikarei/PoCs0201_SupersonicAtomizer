@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, UTC
 from pathlib import Path
+import shutil
 
 from supersonic_atomizer.common import OutputError
 from supersonic_atomizer.domain import OutputMetadata, OutputConfig
@@ -18,6 +19,9 @@ PLOT_FILENAMES: dict[str, str] = {
 	"droplet_mean_diameter": "droplet_mean_diameter.png",
 	"droplet_maximum_diameter": "droplet_maximum_diameter.png",
 	"weber_number": "weber_number.png",
+	"area_profile": "area_profile.png",
+	"slip_velocity": "slip_velocity.png",
+	"pressure_over_total": "pressure_over_total.png",
 }
 
 
@@ -56,14 +60,47 @@ def build_output_metadata(*, output_config: OutputConfig, run_id: str | None = N
 		write_csv=output_config.write_csv,
 		write_json=output_config.write_json,
 		generate_plots=output_config.generate_plots,
+		clean_case=getattr(output_config, "clean_case", True),
 	)
 
 
 def ensure_output_directories(output_metadata: OutputMetadata) -> None:
-	"""Create the runtime output directories required by the artifact metadata."""
+	"""Create the runtime output directories required by the artifact metadata.
+
+	Before creating the new run directory, remove any existing files and
+	subdirectories under the case directory so only the fresh run results
+	remain. This implements the requested behaviour to clear
+	`output/project/case/` prior to writing the new run.
+	"""
 
 	try:
-		Path(output_metadata.output_directory).mkdir(parents=True, exist_ok=True)
+		# Determine run and case directories
+		run_dir = Path(output_metadata.output_directory)
+		case_dir = run_dir.parent
+
+		# If requested via OutputMetadata.clean_case, remove all existing
+		# children under the case directory so that the upcoming run
+		# directory is the only content. When False, preserve
+		# previous run directories to allow multi-run overlays to be
+		# generated and stored.
+		if getattr(output_metadata, "clean_case", False):
+			if case_dir.exists() and case_dir.is_dir():
+				for child in case_dir.iterdir():
+					try:
+						if child.resolve() == run_dir.resolve():
+							continue
+					except OSError:
+						pass
+					try:
+						if child.is_file() or child.is_symlink():
+							child.unlink()
+						elif child.is_dir():
+							shutil.rmtree(child)
+					except OSError:
+						pass
+
+		# Create the run directory and plots directory as required.
+		run_dir.mkdir(parents=True, exist_ok=True)
 		if output_metadata.plot_paths:
 			Path(next(iter(output_metadata.plot_paths.values()))).parent.mkdir(parents=True, exist_ok=True)
 	except OSError as exc:

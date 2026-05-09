@@ -60,9 +60,13 @@ class TestRuntimePlotProfiles(unittest.TestCase):
             simulation_result = _make_result(temp_dir)
             plot_paths = generate_profile_plots(simulation_result)
 
-            self.assertEqual(len(plot_paths), 8)
+            # Expect the expanded set of profile plots (11 total)
+            self.assertEqual(len(plot_paths), 11)
             self.assertTrue(Path(plot_paths["pressure"]).is_file())
             self.assertTrue(Path(plot_paths["weber_number"]).is_file())
+            # New plots should also be present
+            self.assertTrue(Path(plot_paths["area_profile"]).is_file())
+            self.assertTrue(Path(plot_paths["slip_velocity"]).is_file())
 
     def test_requires_plot_output_metadata(self) -> None:
         simulation_result = _make_result()

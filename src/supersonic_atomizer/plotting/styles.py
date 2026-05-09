@@ -12,4 +12,7 @@ PLOT_LABELS: dict[str, tuple[str, str]] = {
 	"droplet_mean_diameter": ("Droplet Mean Diameter", "diameter [m]"),
 	"droplet_maximum_diameter": ("Droplet Maximum Diameter", "diameter [m]"),
 	"weber_number": ("Weber Number", "Weber number [-]"),
+	"area_profile": ("Area Profile", "area [m^2]"),
+	"slip_velocity": ("Slip Velocity", "velocity [m/s]"),
+	"pressure_over_total": ("Pressure / Inlet total pressure", "-"),
 }

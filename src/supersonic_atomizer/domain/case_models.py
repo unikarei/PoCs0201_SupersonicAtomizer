@@ -96,6 +96,10 @@ class OutputConfig:
     write_csv: bool = True
     write_json: bool = True
     generate_plots: bool = True
+    # When true, clear existing files under the case directory before writing
+    # the new run. Default is True so each Solve starts from a clean case
+    # output directory unless explicitly overridden to preserve history.
+    clean_case: bool = True
 
 
 @dataclass(frozen=True, slots=True)

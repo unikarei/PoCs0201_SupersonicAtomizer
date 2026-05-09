@@ -26,7 +26,7 @@ from supersonic_atomizer.gui.state import GUIState
 from supersonic_atomizer.gui.case_store import CaseNameError, CaseNotFoundError, CaseStore, ProjectNameError, ProjectNotFoundError
 from supersonic_atomizer.gui.job_store import get_job_store
 from supersonic_atomizer.gui.multi_run import MultiRunSimulationResult
-from supersonic_atomizer.gui.pages.post_graphs import extract_overlay_plot_series, extract_plot_series
+from supersonic_atomizer.gui.pages.post_graphs import PLOT_FIELDS, extract_overlay_plot_series, extract_plot_series
 from supersonic_atomizer.gui.pages.post_table import aggregate_result_to_table_rows, generate_csv_content, result_to_table_rows
 from supersonic_atomizer.gui.plot_utils import figure_to_base64
 import base64
@@ -84,6 +84,12 @@ def _get_store() -> CaseStore:
 
 def _case_ref(project: str, name: str) -> str:
     return f"{project}/{name}"
+
+
+def _ordered_plot_fields(fields: list[str]) -> list[str]:
+    preferred = [name for name in PLOT_FIELDS.keys() if name in fields]
+    remainder = [name for name in fields if name not in preferred]
+    return preferred + remainder
 
 
 def _materialize_default_project(store: CaseStore) -> None:
@@ -326,7 +332,7 @@ async def get_last_result_for_project_case(project: str, name: str, state: GUISt
             plots[field] = figure_to_base64(fig)
             plt.close(fig)
         table_rows = aggregate_result_to_table_rows(labeled_results, prefs)
-        plot_fields = list(overlay_series.keys())
+        plot_fields = _ordered_plot_fields(list(overlay_series.keys()))
         run_count = record.result.run_count
     else:
         run_result = record.result
@@ -368,7 +374,7 @@ async def get_last_result_for_project_case(project: str, name: str, state: GUISt
                 plots[field] = figure_to_base64(fig)
                 plt.close(fig)
         table_rows = result_to_table_rows(sim_result, prefs)
-        plot_fields = list(series.keys())
+        plot_fields = _ordered_plot_fields(list(plots.keys()))
 
     # Prefer reading CSV from disk when available
     csv_content = generate_csv_content(table_rows)
@@ -488,7 +494,7 @@ async def get_last_result_for_case(name: str, state: GUIState = Depends(get_gui_
             plots[field] = figure_to_base64(fig)
             plt.close(fig)
         table_rows = aggregate_result_to_table_rows(labeled_results, prefs)
-        plot_fields = list(overlay_series.keys())
+        plot_fields = _ordered_plot_fields(list(overlay_series.keys()))
         run_count = record.result.run_count
     else:
         run_result = record.result
@@ -507,7 +513,7 @@ async def get_last_result_for_case(name: str, state: GUIState = Depends(get_gui_
             plots[field] = figure_to_base64(fig)
             plt.close(fig)
         table_rows = result_to_table_rows(sim_result, prefs)
-        plot_fields = list(series.keys())
+        plot_fields = _ordered_plot_fields(list(series.keys()))
 
     csv_content = generate_csv_content(table_rows)
 

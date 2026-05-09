@@ -1389,7 +1389,7 @@ Phase 33 is done when the FastAPI GUI exposes the case store through a tree-styl
 
 ### Definition of Done
 
-Phase 34 is done when the FastAPI GUI shows `x` vs `Area Profile` in both the Grid and Graphs surfaces, and provides a mouse-resizable right-side chat panel that lets the user discuss the currently selected case with an LLM using text input and browser-side voice dictation.
+Phase 34 is done when the FastAPI GUI shows `x` vs `Area Profile` in both the Grid and Graphs surfaces, and provides a mouse-resizable right-side chat panel that lets the user discuss the currently selected scope (case or project) with an LLM using text input and browser-side voice dictation, with scope-aware JSON chat-history persistence.
 
 ### Phase 34 Prerequisites
 
@@ -1399,17 +1399,17 @@ Phase 34 is done when the FastAPI GUI shows `x` vs `Area Profile` in both the Gr
 
 ---
 
-- [ ] **P34-T01 — Update SDD documents for area-plot and chat-panel scope**
+- [x] **P34-T01 — Update SDD documents for area-plot and chat-panel scope**
   - **Purpose:** Record the approved scope and constraints for the new area-plot surfaces and case-aware chat panel before implementation.
   - **Dependencies:** P33-T06.
   - **Completion criteria:** `spec.md`, `architecture.md`, and `tasks.md` describe the new UI surfaces, context boundaries, and credential-handling rules consistently.
 
-- [ ] **P34-T02 — Add `Area Profile` to post-run graph generation**
+- [x] **P34-T02 — Add `Area Profile` to post-run graph generation**
   - **Purpose:** Surface `x` vs `Area` as a first-class plot derived from structured simulation results.
   - **Dependencies:** P34-T01.
   - **Completion criteria:** The Graphs tab can render `Area Profile`, and it appears first in the default plot ordering for single-run and multi-run result payloads.
 
-- [ ] **P34-T03 — Add explicit `x` vs `Area` figure to the Grid tab**
+- [x] **P34-T03 — Add explicit `x` vs `Area` figure to the Grid tab**
   - **Purpose:** Make the tabulated geometry easier to inspect before running the solver.
   - **Dependencies:** P34-T01.
   - **Completion criteria:** The Grid tab displays an explicit labeled `x` vs `Area` figure that updates from the current area table and remains consistent with saved grid values.
@@ -1419,15 +1419,22 @@ Phase 34 is done when the FastAPI GUI shows `x` vs `Area Profile` in both the Gr
   - **Dependencies:** P34-T01.
   - **Completion criteria:** The browser layout includes a right-side pane with adjustable width, scrollable conversation history, and a bottom input area with text and voice controls.
 
-- [ ] **P34-T05 — Implement case-aware server-side chat integration**
-  - **Purpose:** Let the browser send chat turns to a server-side LLM adapter that receives selected-case context and latest-result context.
+- [ ] **P34-T05 — Implement scope-aware server-side chat integration and persistence**
+  - **Purpose:** Let the browser send chat turns to a server-side LLM adapter that receives selected scope context (single case or all project cases), persists chat history as JSON in scope-aware folders, and applies the approved reasoning guardrails.
   - **Dependencies:** P34-T04.
-  - **Completion criteria:** Chat requests flow through dedicated FastAPI endpoints and a server-side provider adapter; missing provider configuration returns a user-readable error without breaking the rest of the GUI.
+  - **Completion criteria:**
+    - Chat requests flow through dedicated FastAPI endpoints and a server-side provider adapter; missing provider configuration returns a user-readable error without breaking the rest of the GUI.
+    - Scope binding works as specified: case selection binds one case, project selection binds all cases in the project.
+    - Chat history is persisted as JSON:
+      - case scope: `cases/<project>/chat/<case>/`
+      - project scope: `cases/<project>/chat/`
+    - Prompt payload includes referenced analysis data summary (inputs, outputs, grid), scope metadata, and reasoning-policy instructions.
+    - Prompt context includes graph-image inventory (what exists and where); binary image transfer is performed only when explicitly requested by the LLM workflow.
 
 - [ ] **P34-T06 — Add focused tests and verify regression safety**
-  - **Purpose:** Protect the new graph ordering, grid figure presence, chat API contract, and right-panel markup while preserving prior GUI behavior.
+  - **Purpose:** Protect the new graph ordering, grid figure presence, chat API contract, scope binding, JSON persistence layout, and right-panel markup while preserving prior GUI behavior.
   - **Dependencies:** P34-T02, P34-T03, P34-T05.
-  - **Completion criteria:** FastAPI and GUI regression tests cover the new structural/API behavior and the targeted regression suites pass.
+  - **Completion criteria:** FastAPI and GUI regression tests cover the new structural/API behavior (including case/project scope chat binding and JSON persistence paths) and the targeted regression suites pass.
 
 - [ ] **P34-T07 — Add "チャット" / "要約" tab split inside the chat conversation area**
   - **Purpose:** Allow users to switch between the chat dialogue view and an on-demand summary view within the right-side chat panel, without leaving the active case context.
@@ -1460,3 +1467,56 @@ Phase 34 is done when the FastAPI GUI shows `x` vs `Area Profile` in both the Gr
     - Output tree follows project/case hierarchy for all cases.
     - Startup reconciliation creates missing case output directories and quarantines unmatched output entries to backup.
     - Post tabs can render using output artifacts even after application restart.
+
+---
+
+## Phase 35. Chat-Driven Conditions/Grid Change Patterns
+
+### Definition of Done
+
+Phase 35 is done when the GUI/API supports five documented chat-driven
+Conditions/Grid change patterns and implements approval-gated transactional
+updates with dedicated APIs, existing validation reuse, and explicit
+diff-confirmation behavior.
+
+### Phase 35 Prerequisites
+
+- Phase 34 must be complete enough to provide chat message transport.
+- Existing config validation/application startup validation chain remains the
+  single source of truth for physical/config validity.
+
+---
+
+- [x] **P35-T01 — Update SDD documents for five implementation patterns**
+  - **Purpose:** Define and freeze the approved five-pattern model before code changes.
+  - **Dependencies:** P34-T01.
+  - **Completion criteria:** `spec.md`, `architecture.md`, and `tasks.md` include
+    consistent descriptions of patterns 1-5 and the mandatory Pattern 4 sequence.
+
+- [x] **P35-T02 — Add dedicated chat proposal APIs for Conditions/Grid edits**
+  - **Purpose:** Introduce explicit proposal lifecycle endpoints independent from free-text chat replies.
+  - **Dependencies:** P35-T01.
+  - **Completion criteria:** FastAPI provides proposal create/apply/confirm/reject
+    endpoints with typed schemas and clear error behavior.
+
+- [x] **P35-T03 — Reuse existing validation chain in proposal apply flow**
+  - **Purpose:** Ensure no chat-driven update bypasses existing validation responsibilities.
+  - **Dependencies:** P35-T02.
+  - **Completion criteria:** Apply path executes schema + semantic + defaults +
+    translation/runtime-ready checks before persistence.
+
+- [x] **P35-T04 — Implement Pattern 4 explicit approval + diff-confirmation flow**
+  - **Purpose:** Enforce safe transactional update semantics for mutable chat changes.
+  - **Dependencies:** P35-T02, P35-T03.
+  - **Completion criteria:**
+    - Chat proposal creation has no write side effect.
+    - Explicit user approval flag is mandatory for apply.
+    - Conditions/Grid-only patch scope is enforced.
+    - Apply returns structured before/after diff.
+    - Final confirmation endpoint records completion state.
+
+- [x] **P35-T05 — Add focused API tests for proposal lifecycle and validation failures**
+  - **Purpose:** Prevent regressions in the new proposal lifecycle contract.
+  - **Dependencies:** P35-T04.
+  - **Completion criteria:** Tests cover successful propose/apply/confirm,
+    approval-required failure, and invalid-path/invalid-value rejection paths.

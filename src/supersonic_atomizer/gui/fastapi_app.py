@@ -77,7 +77,7 @@ try:
     # remain authoritative.
     project_root = Path(__file__).resolve().parents[2]
     dotenv_path = project_root / ".env"
-    if dotenv_path.exists():
+    if dotenv_path.exists():S
         load_dotenv(dotenv_path=str(dotenv_path), override=False)
     # Optional: validate OPENAI_API_KEY by querying the provider models endpoint.
     # Controlled by OPENAI_VALIDATE_ON_START env var (set to '1' or 'true' to enable).

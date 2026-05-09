@@ -24,6 +24,21 @@ matplotlib.use("Agg")
 
 _OUTPUT_ROOT = Path("outputs")
 _BACKUP_DIR_NAME = "backup"
+_PREFERRED_PLOT_FIELD_ORDER: tuple[str, ...] = (
+    "area_profile",
+    "pressure",
+    "temperature",
+    "working_fluid_velocity",
+    "droplet_velocity",
+    "slip_velocity",
+    "Mach_number",
+    "mach_number",
+    "droplet_mean_diameter",
+    "droplet_maximum_diameter",
+    "Weber_number",
+    "weber_number",
+    "pressure_over_total",
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -145,6 +160,11 @@ def _figure_to_base64(fig: Any) -> str:
     return base64.b64encode(buf.getvalue()).decode("ascii")
 
 
+def _order_plot_fields(fields: list[str]) -> list[str]:
+    index = {name: idx for idx, name in enumerate(_PREFERRED_PLOT_FIELD_ORDER)}
+    return sorted(fields, key=lambda f: (index.get(f, len(index)), f))
+
+
 def _build_plots_from_rows(rows: list[dict[str, Any]]) -> dict[str, str]:
     if not rows:
         return {}
@@ -211,7 +231,7 @@ def load_last_result_payload_from_output(
     if not plots:
         plots = _build_plots_from_rows(table_rows)
 
-    plot_fields = list(plots.keys())
+    plot_fields = _order_plot_fields(list(plots.keys()))
 
     return {
         "status": "completed",

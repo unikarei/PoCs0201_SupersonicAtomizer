@@ -21,6 +21,7 @@ Non-blocking design (architecture.md B.7.2):
 from __future__ import annotations
 
 import threading
+from pathlib import Path
 from typing import Any
 
 import matplotlib
@@ -46,6 +47,12 @@ router = APIRouter()
 
 # One shared bridge — thread-safe because ApplicationService is stateless per run.
 _bridge = ServiceBridge()
+
+
+def _ordered_plot_fields(fields: list[str]) -> list[str]:
+    preferred = [name for name in PLOT_FIELDS.keys() if name in fields]
+    remainder = [name for name in fields if name not in preferred]
+    return preferred + remainder
 
 
 def _case_ref(project_name: str | None, case_name: str) -> str:
@@ -82,6 +89,37 @@ def _run_multi_job(
             expanded_runs=expanded_runs,
             runner=_bridge.run_simulation_sync,
         )
+        # Persist overlay plots to disk so outputs include the same
+        # overlay graphics the GUI displays. Use the case plots directory
+        # under the first run's output_metadata as the target.
+        try:
+            if batch_result.runs:
+                # Get the case plots directory from the first run's output metadata
+                first_run = batch_result.runs[0].run_result
+                sim = first_run.simulation_result
+                if sim is not None and sim.output_metadata is not None:
+                    case_dir = Path(sim.output_metadata.output_directory).parent
+                    plots_dir = case_dir / "plots"
+                    # Build labeled results list for plotting
+                    labeled = [
+                        (r.run_label, r.run_result.simulation_result)
+                        for r in batch_result.runs
+                        if r.run_result.simulation_result is not None
+                    ]
+                    # Build overlay series using the same extraction as the
+                    # Graph tab so unit conversions and labels match.
+                    prefs = gui_state.unit_preferences()
+                    overlay_series = extract_overlay_plot_series(labeled, prefs)
+
+                    # Only import plotting here to avoid GUI <-> plotting circulars at module import
+                    from supersonic_atomizer.plotting import generate_overlay_plots
+
+                    # write overlays (best-effort) using GUI-derived series
+                    generate_overlay_plots(labeled, plots_dir, overlay_series=overlay_series)
+        except Exception:
+            # overlay writing is best-effort for now; ignore failures so the
+            # overall batch does not become failing.
+            pass
         if batch_result.runs:
             gui_state.last_run_result = batch_result.runs[-1].run_result
         job_store.mark_complete(job_id, batch_result)
@@ -178,7 +216,7 @@ async def get_simulation_result(
             plots[field] = figure_to_base64(fig)
             plt.close(fig)
         table_rows = aggregate_result_to_table_rows(labeled_results, prefs)
-        plot_fields = list(overlay_series.keys())
+        plot_fields = _ordered_plot_fields(list(overlay_series.keys()))
         run_count = record.result.run_count
     else:
         run_result = record.result
@@ -197,7 +235,7 @@ async def get_simulation_result(
             plots[field] = figure_to_base64(fig)
             plt.close(fig)
         table_rows = result_to_table_rows(sim_result, prefs)
-        plot_fields = list(series.keys())
+        plot_fields = _ordered_plot_fields(list(series.keys()))
 
     csv_content = generate_csv_content(table_rows)
 
