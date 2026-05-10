@@ -75,10 +75,10 @@ try:
     # Prefer a project-root .env file for local development. This does not
     # overwrite existing environment variables so system/user-level values
     # remain authoritative.
-    project_root = Path(__file__).resolve().parents[2]
+    project_root = Path(__file__).resolve().parents[3]
     dotenv_path = project_root / ".env"
-    if dotenv_path.exists():S
-        load_dotenv(dotenv_path=str(dotenv_path), override=False)
+    if dotenv_path.exists():
+        load_dotenv(dotenv_path=str(dotenv_path), override=True)
     # Optional: validate OPENAI_API_KEY by querying the provider models endpoint.
     # Controlled by OPENAI_VALIDATE_ON_START env var (set to '1' or 'true' to enable).
     try:

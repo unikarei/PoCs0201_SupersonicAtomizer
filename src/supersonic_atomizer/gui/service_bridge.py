@@ -34,7 +34,7 @@ from supersonic_atomizer.app.services import (
 )
 
 
-class ServiceBridge:S
+class ServiceBridge:
     """Adapts GUI events to application-service calls.
 
     Parameters
@@ -67,7 +67,7 @@ class ServiceBridge:S
     # ── Synchronous execution (testing / scripting) ─────────────────────────────
 
     def run_simulation_sync(self, case_path: str) -> SimulationRunResult:
-        """Invoke the full simulation synchronously and return the result.S
+        """Invoke the full simulation synchronously and return the result.
 
         Intended for testing only.  GUI code should use ``run_simulation_async``
         to keep the UI responsive during long-running solves.

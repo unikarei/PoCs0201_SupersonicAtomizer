@@ -12,8 +12,7 @@ Always work in this order:
 1. spec
 2. architecture
 3. tasks
-4. copilot-instructions
-5. implementation
+4. implementation
 
 Project goal:
 Build a Python simulator for atomization of water droplets in a quasi-1D compressible flow duct/nozzle.
