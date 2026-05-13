@@ -1,0 +1,35 @@
+version: '3.9'
+
+services:
+  supersonic-atomizer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: supersonic-atomizer-app
+    ports:
+      - "8502:8502"
+    environment:
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./cases:/app/cases
+      - ./outputs:/app/outputs
+      - ./examples:/app/examples
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8502/health').close()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    networks:
+      - atomizer-network
+
+networks:
+  atomizer-network:
+    driver: bridge
+
+# Usage:
+# docker compose up -d       # Start in background
+# docker compose down        # Stop and remove containers
+# docker compose logs -f     # View logs
+# docker compose ps          # Check status
