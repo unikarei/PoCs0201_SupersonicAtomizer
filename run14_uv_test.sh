@@ -1,9 +1,14 @@
 #!/usr/bin/env bash
+# ------------------------------------------------------------------------------
+# Purpose:
+#   Run project tests through uv-managed environment.
+#   Defaults to tests/ with verbose output, or passes custom pytest args.
+# ------------------------------------------------------------------------------
 set -euo pipefail
-RUN12_SCRIPT_VERSION="v0.0.2"
+RUN14_SCRIPT_VERSION="v0.0.2"
 
 if [ "$0" != "${BASH_SOURCE[0]}" ]; then
-	printf 'Error: run12_uv_test.sh must be executed directly, not sourced.\n' >&2
+	printf 'Error: run14_uv_test.sh must be executed directly, not sourced.\n' >&2
 	return 1 2>/dev/null || exit 1
 fi
 
@@ -16,9 +21,9 @@ fi
 
 cat <<EOF
 ========================================
-			uv test Script
+			Run Tests with uv
 ========================================
-Script version : $RUN12_SCRIPT_VERSION
+Script version : $RUN14_SCRIPT_VERSION
 Project root   : $(pwd)
 
 EOF
@@ -32,4 +37,4 @@ else
 fi
 
 echo
-echo "[OK] Test command completed."
+echo "[OK] Test command completed successfully."

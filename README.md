@@ -118,11 +118,14 @@ If you prefer not to type `uv` commands manually, use the launcher scripts in th
 #### Windows `.bat`
 
 ```bat
-run10_uv_sync.bat
-run11_uv_run.bat examples\air_nozzle.yaml
-run12_uv_test.bat
-run13_uv_add.bat numpy
-run14_uv_add_dev.bat ruff
+run10_uv_venv.bat
+run11_uv_sync.bat
+run12_app_start.bat
+run13_uv_run.bat supersonic-atomizer examples\air_nozzle.yaml
+run14_uv_test.bat
+run15_uv_add_dev.bat ruff
+run16_uv_add_prd.bat numpy
+run17_uv_sync.bat
 run20_gui.bat              :: Streamlit GUI  (port 8501)
 run21_fastapi_gui.bat      :: FastAPI GUI    (port 8502)
 ```
@@ -130,11 +133,14 @@ run21_fastapi_gui.bat      :: FastAPI GUI    (port 8502)
 #### POSIX `.sh`
 
 ```bash
-./run10_uv_sync.sh
-./run11_uv_run.sh examples/air_nozzle.yaml
-./run12_uv_test.sh
-./run13_uv_add.sh numpy
-./run14_uv_add_dev.sh ruff
+./run10_uv_venv.sh
+./run11_uv_sync.sh
+./run12_app_start.sh
+./run13_uv_run.sh supersonic-atomizer examples/air_nozzle.yaml
+./run14_uv_test.sh
+./run15_uv_add_dev.sh ruff
+./run16_uv_add_prd.sh numpy
+./run17_uv_sync.sh
 ./run20_gui.sh             # Streamlit GUI  (port 8501)
 ./run21_fastapi_gui.sh     # FastAPI GUI    (port 8502)
 ```
@@ -142,7 +148,7 @@ run21_fastapi_gui.bat      :: FastAPI GUI    (port 8502)
 On Linux or macOS, make the shell scripts executable once if needed:
 
 ```bash
-chmod +x run10_uv_sync.sh run11_uv_run.sh run12_uv_test.sh run13_uv_add.sh run14_uv_add_dev.sh run20_gui.sh run21_fastapi_gui.sh
+chmod +x run10_uv_venv.sh run11_uv_sync.sh run12_app_start.sh run13_uv_run.sh run14_uv_test.sh run15_uv_add_dev.sh run16_uv_add_prd.sh run17_uv_sync.sh run20_gui.sh run21_fastapi_gui.sh
 ```
 
 ### 4. Check Outputs

@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+# ------------------------------------------------------------------------------
+# Purpose: Update dependencies.
+#   Synchronize project dependencies from pyproject.toml/uv.lock into local env.
+#   Use this first when setting up or after dependency changes.
+# ------------------------------------------------------------------------------
 set -euo pipefail
 RUN10_SCRIPT_VERSION="v0.0.2"
 

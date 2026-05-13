@@ -1,3 +1,8 @@
+REM ------------------------------------------------------------------------------
+REM Purpose:
+REM   Synchronize project dependencies from pyproject.toml/uv.lock into local env.
+REM   Use this first when setting up or after dependency changes.
+REM ------------------------------------------------------------------------------
 @echo off
 setlocal enableextensions
 set "RUN10_SCRIPT_VERSION=v0.0.2"
