@@ -63,48 +63,6 @@ This command generates:
 
 > `uv run` automatically uses the project's virtual environment — no manual activation needed.
 
-#### Launch the GUI
-
-```bash
-uv run streamlit run src/supersonic_atomizer/gui/streamlit_app.py
-```
-
-Or use the helper script:
-
-```bash
-# Windows
-run20_gui.bat
-
-# POSIX
-./run20_gui.sh
-```
-
-The GUI opens in your default browser at **http://127.0.0.1:8501**. Use it to
-create cases, set simulation conditions, run the solver, and view results —
-without editing YAML directly.
-
-#### FastAPI GUI (port 8502)
-
-An alternative browser-based GUI implemented with FastAPI + vanilla JavaScript:
-
-```bash
-uv run uvicorn supersonic_atomizer.gui.fastapi_app:app --host 127.0.0.1 --port 8502 --reload
-```
-
-Or use the helper script:
-
-```bash
-# Windows
-run21_fastapi_gui.bat
-
-# POSIX
-./run21_fastapi_gui.sh
-```
-
-Opens at **http://127.0.0.1:8502**. Provides the same six-tab interface
-(Conditions, Grid, Solve, Graphs, Table, Settings) as the Streamlit GUI through
-a REST API backend with JSON polling — no Streamlit dependency required at runtime.
-
 #### Run Tests
 
 ```bash
@@ -126,7 +84,6 @@ run14_uv_test.bat
 run15_uv_add_dev.bat ruff
 run16_uv_add_prd.bat numpy
 run17_uv_sync.bat
-run20_gui.bat              :: Streamlit GUI  (port 8501)
 run21_fastapi_gui.bat      :: FastAPI GUI    (port 8502)
 ```
 
@@ -141,14 +98,13 @@ run21_fastapi_gui.bat      :: FastAPI GUI    (port 8502)
 ./run15_uv_add_dev.sh ruff
 ./run16_uv_add_prd.sh numpy
 ./run17_uv_sync.sh
-./run20_gui.sh             # Streamlit GUI  (port 8501)
 ./run21_fastapi_gui.sh     # FastAPI GUI    (port 8502)
 ```
 
 On Linux or macOS, make the shell scripts executable once if needed:
 
 ```bash
-chmod +x run10_uv_venv.sh run11_uv_sync.sh run12_app_start.sh run13_uv_run.sh run14_uv_test.sh run15_uv_add_dev.sh run16_uv_add_prd.sh run17_uv_sync.sh run20_gui.sh run21_fastapi_gui.sh
+chmod +x run10_uv_venv.sh run11_uv_sync.sh run12_app_start.sh run13_uv_run.sh run14_uv_test.sh run15_uv_add_dev.sh run16_uv_add_prd.sh run17_uv_sync.sh run21_fastapi_gui.sh
 ```
 
 ### 4. Check Outputs

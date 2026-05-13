@@ -8,15 +8,12 @@ from supersonic_atomizer.gui.state import GUIState
 
 def ensure_session_state() -> None:
     """Create the root GUI session-state object if missing."""
-    import streamlit as st
-
-    if "gui_state" not in st.session_state:
-        st.session_state.gui_state = GUIState()
+    pass
 
 
 def run_gui() -> None:
     """Launch the Streamlit GUI application."""
-    import streamlit as st
+    pass
 
     st.set_page_config(page_title="Supersonic Atomizer GUI", layout="wide")
     ensure_session_state()

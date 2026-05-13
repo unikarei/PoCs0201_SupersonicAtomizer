@@ -1,7 +1,6 @@
 """Unit settings page — display unit selection (P24-T04).
 
-Provides pure-Python helpers for unit-preference management and a Streamlit
-render function for the ⚙ Settings tab.
+Provides pure-Python helpers for unit-preference management.
 
 Architectural boundary (architecture.md, Appendix B.9):
 - This module calls only gui/unit_settings.py and GUIState helpers.
@@ -102,40 +101,3 @@ def get_unit_preference(state: GUIState, group: str) -> str:
     if field is None:
         return DEFAULT_UNITS.get(group, "")
     return getattr(state, field, DEFAULT_UNITS.get(group, ""))
-
-
-# ── Streamlit render ──────────────────────────────────────────────────────────
-
-
-def render_unit_settings() -> None:
-    """Render the ⚙ Settings tab with per-group unit selectboxes."""
-    import streamlit as st
-
-    state: GUIState = st.session_state.gui_state
-
-    st.subheader("⚙ Display Units")
-    st.caption(
-        "These settings affect only what is displayed in the Post tabs. "
-        "All solver inputs and outputs remain in SI units internally."
-    )
-
-    st.divider()
-
-    changed = False
-    for group, label in UNIT_GROUP_LABELS.items():
-        choices = get_unit_choices(group)
-        current = get_unit_preference(state, group)
-        idx = choices.index(current) if current in choices else 0
-        selected = st.selectbox(label, choices, index=idx, key=f"unit_pref_{group}")
-        if selected != current:
-            apply_unit_preference(state, group, selected)
-            changed = True
-
-    if changed:
-        st.rerun()
-
-    st.divider()
-    st.info(
-        "**Pre-tab inputs** are always accepted in SI units (Pa, K, m, m/s). "
-        "Unit preferences apply only to the **Post — Graphs** and **Post — Table** displays."
-    )

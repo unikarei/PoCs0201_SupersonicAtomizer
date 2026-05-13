@@ -36,10 +36,10 @@ droplet_injection:
   droplet_velocity_in: 10
   droplet_diameter_mean_in: 5.0e-05
   droplet_diameter_max_in: 0.0001
-  water_mass_flow_rate_percent: 10000
+  water_mass_flow_rate_percent: 300
   water_mass_flow_rate: null
   injection_mode: droplet_injection
-  liquid_jet_diameter: 100
+  liquid_jet_diameter: 100000000
   liquid_mass_flow_rate: 7.839844e-05
   liquid_velocity: 10
   liquid_density: 998.2
@@ -78,3 +78,4 @@ models:
   tab_spring_k: 0.001
   tab_damping_c: 1.0e-06
   tab_breakup_threshold: 1
+has_result: true
